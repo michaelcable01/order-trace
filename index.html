@@ -71,12 +71,14 @@ details li{margin:4px 0}
   <div class="row" style="margin-bottom:12px">
     <button class="b pri" id="startBtn">Start sensors</button>
     <button class="b" id="recBtn" disabled>Record</button>
+    <button class="b" id="obdBtn">Connect OBD</button>
     <span class="muted" id="recInfo"></span>
   </div>
+  <p class="muted" id="obdStat" style="margin:-4px 0 12px">OBD: not connected</p>
   <div class="card">
     <div class="big">
       <div><b id="spd">0</b><span id="spdU">mph</span> <span id="spdSrc"></span></div>
-      <div><b id="rpm">—</b><span>rpm</span></div>
+      <div><b id="rpm">—</b><span id="rpmL">rpm</span></div>
       <div><b id="pkF">—</b><span>peak Hz</span></div>
       <div><b id="pkA">—</b><span>peak mg</span></div>
     </div>
@@ -100,7 +102,7 @@ details li{margin:4px 0}
   <div class="card" id="engCard"><h2>Engine</h2>
     <div class="g2">
       <div><label for="cyl">Cylinders</label><select id="cyl"><option>3</option><option>4</option><option>5</option><option>6</option><option>8</option><option>10</option><option>12</option></select></div>
-      <div><label for="rpmMode">Engine rpm from</label><select id="rpmMode"><option value="gear">Selected gear</option><option value="manual">Manual entry</option></select></div>
+      <div><label for="rpmMode">Engine rpm from</label><select id="rpmMode"><option value="obd">OBD adapter (live)</option><option value="gear">Selected gear</option><option value="manual">Manual entry</option></select></div>
       <div><label for="gear">Gear in use</label><select id="gear"></select></div>
       <div><label for="rpmMan">Manual rpm</label><input id="rpmMan" inputmode="numeric"></div>
     </div>
@@ -110,14 +112,14 @@ details li{margin:4px 0}
   </div>
   <div class="card"><h2>Speed and detection</h2>
     <div class="g2">
-      <div><label for="spdMode">Speed source</label><select id="spdMode"><option value="gps">GPS</option><option value="manual">Manual / steady cruise</option><option value="sim">Simulator (demo)</option></select></div>
+      <div><label for="spdMode">Speed source</label><select id="spdMode"><option value="obd">OBD adapter (wheel speed)</option><option value="gps">GPS</option><option value="manual">Manual / steady cruise</option><option value="sim">Simulator (demo)</option></select></div>
       <div><label for="units">Units</label><select id="units"><option value="mph">mph</option><option value="kmh">km/h</option></select></div>
       <div><label for="spdMan">Manual / sim speed</label><input id="spdMan" inputmode="decimal"></div>
       <div><label for="simSrc">Simulator fault</label><select id="simSrc"><option value="T1">Tyre imbalance (T1)</option><option value="T2">Tyre out-of-round (T2)</option><option value="D1">Propshaft imbalance (D1)</option><option value="D2">U-joint angle (D2)</option><option value="E2">Engine firing (E2)</option><option value="none">None (noise only)</option></select></div>
       <div><label for="tol">Match tolerance (%)</label><input id="tol" inputmode="decimal"></div>
       <div><label for="minA">Minimum peak (mg)</label><input id="minA" inputmode="decimal"></div>
     </div>
-    <p class="muted">Settings save on this device automatically.</p>
+    <p class="muted">Settings save on this device automatically. OBD needs a browser with Web Bluetooth: on iPhone use the free Bluefy browser (Safari has no Bluetooth access). Don't pair the adapter in iOS Settings; connect from the Live tab.</p>
   </div>
 </section>
 
@@ -172,14 +174,43 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.query
 const buf={t:[],x:[],y:[],z:[]};
 let gpsMps=null,running=false,simTimer=null,simT=0,fs=0,lastSpec=null,lastOrders=[],recording=false,log=[],recStart=0,grav={x:0,y:0,z:-G},zeroAng=null,wake=null;
 const toMps=v=>S.units==='mph'?v*0.44704:v/3.6, fromMps=v=>S.units==='mph'?v/0.44704:v*3.6;
-function speedMps(){if(S.spdMode==='gps')return gpsMps??0;return toMps(+S.spdMan||0)}
-function rpmNow(v){const t=tireDims();if(!t||S.drive==='ev')return null;if(S.rpmMode==='manual')return +S.rpmMan||0;const g=S.gears.split(/[,\s]+/).map(Number).filter(x=>x>0)[+S.gear-1]||1;return v/t.c*60*(+S.axle||1)*g}
+function speedMps(){if(S.spdMode==='obd')return obdFresh()&&OBD.kmh!=null?OBD.kmh/3.6:0;if(S.spdMode==='gps')return gpsMps??0;return toMps(+S.spdMan||0)}
+function rpmNow(v){const t=tireDims();if(!t||S.drive==='ev')return null;if(S.rpmMode==='manual')return +S.rpmMan||0;if(S.rpmMode==='obd')return obdFresh()?OBD.rpm:null;const g=S.gears.split(/[,\s]+/).map(Number).filter(x=>x>0)[+S.gear-1]||1;return v/t.c*60*(+S.axle||1)*g}
 function orders(v,rpm){const t=tireDims();if(!t)return[];const w=v/t.c,ax=+S.axle||1,o=[
  {k:'T1',n:'Tyre 1st',s:'tyre',f:w},{k:'T2',n:'Tyre 2nd',s:'tyre',f:2*w},{k:'T3',n:'Tyre 3rd',s:'tyre',f:3*w}];
  if(S.drive==='prop')o.push({k:'D1',n:'Propshaft 1st',s:'shaft',f:w*ax},{k:'D2',n:'Propshaft 2nd',s:'shaft',f:2*w*ax});
  if(S.drive==='ev')o.push({k:'M1',n:'Motor 1st',s:'motor',f:w*(+S.motor||1)});
  else if(rpm){const e=rpm/60,c=+S.cyl;o.push({k:'E05',n:'Engine ½',s:'engine',f:e/2},{k:'E1',n:'Engine 1st',s:'engine',f:e},{k:'E2',n:`Engine firing (${c/2})`,s:'engine',f:e*c/2})}
  return o.filter(x=>x.f>0)}
+
+
+/* ---------- OBD (ELM327 over Bluetooth LE: Veepeak OBDCheck BLE/BLE+ and similar) ---------- */
+const OBD={tx:null,buf:'',q:null,rpm:null,kmh:null,t:0,ok:false,dev:null};
+const SVCS=[0xfff0,0xffe0,0x18f0,'e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
+const obdFresh=()=>OBD.ok&&performance.now()-OBD.t<3000;
+const obdStat=t=>$('obdStat').textContent='OBD: '+t;
+function gearEst(v,rpm){const t=tireDims();if(!t||!rpm||v<3||S.drive==='ev')return null;const r=rpm/(v/t.c*60)/(+S.axle||1),g=S.gears.split(/[,\s]+/).map(Number).filter(x=>x>0);let bi=0;g.forEach((x,i)=>{if(Math.abs(x-r)<Math.abs(g[bi]-r))bi=i});return Math.abs(g[bi]-r)/g[bi]<.12?bi+1:null}
+function obdData(e){OBD.buf+=new TextDecoder().decode(e.target.value);if(OBD.buf.includes('>')){const r=OBD.buf.split('>')[0];OBD.buf='';const q=OBD.q;OBD.q=null;if(q)q(r)}}
+function obdCmd(c,to=1000){return new Promise(res=>{OBD.buf='';const t=setTimeout(()=>{OBD.q=null;res('')},to);OBD.q=r=>{clearTimeout(t);res(r)};const d=new TextEncoder().encode(c+'\r'),x=OBD.tx;
+ const w=x.properties.writeWithoutResponse&&x.writeValueWithoutResponse?x.writeValueWithoutResponse(d):x.writeValueWithResponse?x.writeValueWithResponse(d):x.writeValue(d);Promise.resolve(w).catch(()=>{})})}
+async function obdConnect(){
+ if(OBD.ok){OBD.ok=false;try{OBD.dev.gatt.disconnect()}catch(e){}obdStat('disconnected');$('obdBtn').textContent='Connect OBD';return}
+ if(!navigator.bluetooth){obdStat('this browser has no Bluetooth. On iPhone open the page in Bluefy.');return}
+ try{obdStat('choose your adapter (often named VEEPEAK or OBDBLE)…');
+  const dev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:SVCS});
+  dev.addEventListener('gattserverdisconnected',()=>{OBD.ok=false;obdStat('disconnected');$('obdBtn').textContent='Connect OBD'});
+  obdStat('connecting…');const srv=await dev.gatt.connect();let rx=null,tx=null;
+  for(const u of SVCS){try{const sv=await srv.getPrimaryService(u);for(const c of await sv.getCharacteristics()){const p=c.properties;if(!rx&&(p.notify||p.indicate))rx=c;if(!tx&&(p.write||p.writeWithoutResponse))tx=c}if(rx&&tx)break;rx=tx=null}catch(e){}}
+  if(!rx||!tx)throw new Error('no OBD serial service found on that device');
+  await rx.startNotifications();rx.addEventListener('characteristicvaluechanged',obdData);OBD.tx=tx;OBD.dev=dev;
+  obdStat('initialising adapter…');for(const c of['ATZ','ATE0','ATL0','ATS0','ATH0','ATSP0'])await obdCmd(c,c==='ATZ'?2500:1500);
+  const t=await obdCmd('0100',6000);if(!/41\s*00/.test(t))throw new Error('adapter found but the car did not answer. Is the ignition on?');
+  OBD.ok=true;OBD.t=performance.now();$('obdBtn').textContent='Disconnect OBD';obdPoll();
+ }catch(e){obdStat(e.message)}}
+async function obdPoll(){let i=0;while(OBD.ok){const r=(await obdCmd(i++%2?'010D':'010C')).replace(/\s/g,'').toUpperCase();let m=r.match(/410C([0-9A-F]{2})([0-9A-F]{2})/);
+ if(m){OBD.rpm=(parseInt(m[1],16)*256+parseInt(m[2],16))/4;OBD.t=performance.now()}m=r.match(/410D([0-9A-F]{2})/);if(m){OBD.kmh=parseInt(m[1],16);OBD.t=performance.now()}
+ if(OBD.ok)obdStat(`connected · ${OBD.rpm==null?'—':Math.round(OBD.rpm)} rpm · ${OBD.kmh==null?'—':Math.round(S.units==='mph'?OBD.kmh/1.609344:OBD.kmh)} ${S.units==='mph'?'mph':'km/h'}`)}}
+$('obdBtn').onclick=obdConnect;
 
 /* ---------- sensors ---------- */
 function msg(t){$('msg').textContent=t;$('msg').classList.toggle('on',!!t)}
@@ -216,7 +247,7 @@ function match(p,o){let best=null;for(const x of o){if(x.f>=fs/2)continue;const 
 
 /* ---------- loop ---------- */
 function loop(){if(!running)return;const v=speedMps(),rpm=rpmNow(v),sp=spectrum();lastOrders=orders(v,rpm);
- $('spd').textContent=fromMps(v).toFixed(0);$('spdSrc').textContent=S.spdMode==='gps'?(gpsMps==null?'· GPS searching':'· GPS'):S.spdMode==='sim'?'· sim':'· manual';$('rpm').textContent=rpm?Math.round(rpm):'—';
+ $('spd').textContent=fromMps(v).toFixed(0);$('spdSrc').textContent=S.spdMode==='obd'?(obdFresh()?'· OBD':'· OBD waiting'):S.spdMode==='gps'?(gpsMps==null?'· GPS searching':'· GPS'):S.spdMode==='sim'?'· sim':'· manual';$('rpm').textContent=rpm?Math.round(rpm):'—';$('rpmL').textContent='rpm'+(gearEst(v,rpm)?' · gear ≈ '+gearEst(v,rpm):'');
  if(sp){lastSpec=sp;$('fsTag').textContent=`${sp.fs.toFixed(0)} Hz · sees to ${(sp.fs/2).toFixed(0)} Hz`;const pk=peaks(sp),top=pk[0],m=top&&match(top,lastOrders);
   $('pkF').textContent=top?top.f.toFixed(1):'—';$('pkA').textContent=top?top.a.toFixed(0):'—';
   if(!top){$('vDot').style.background='var(--ok)';$('vTxt').textContent='No significant vibration'}
