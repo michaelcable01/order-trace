@@ -124,7 +124,7 @@ details li{margin:4px 0}
       <div><label for="tol">Match tolerance (%)</label><input id="tol" inputmode="decimal"></div>
       <div><label for="minA">Minimum peak (mg)</label><input id="minA" inputmode="decimal"></div>
     </div>
-    <p class="muted">Settings save on this device automatically. OBD needs a browser with Web Bluetooth: on iPhone use the free Bluefy browser (Safari has no Bluetooth access). Don't pair the adapter in iOS Settings; connect from the Live tab.</p>
+    <p class="muted">Defaults are set for a 2014 BMW 330d xDrive Touring. Check the final drive: in D at a steady 70 mph the rev counter should read about 1,750 rpm with 2.81; about 1,600 means 2.56. Settings save on this device automatically. OBD needs a browser with Web Bluetooth: on iPhone use the free Bluefy browser (Safari has no Bluetooth access). Don't pair the adapter in iOS Settings; connect from the Live tab.</p>
   </div>
 </section>
 
@@ -159,10 +159,11 @@ details li{margin:4px 0}
 <script>
 {
 const $=id=>document.getElementById(id);
-const DEF={tire:'225/45R17',axle:'3.15',drive:'prop',gears:'4.71,3.14,2.11,1.67,1.29,1.00,0.84,0.67',cyl:'6',rpmMode:'gear',gear:'7',rpmMan:'2000',motor:'9.0',spdMode:'gps',units:'mph',spdMan:'70',simSrc:'T1',tol:'6',minA:'6'};
+/* Defaults: 2014 BMW 330d xDrive Touring (F31), N57 straight-six, ZF 8HP, 225/40R19 */
+const DEF={tire:'225/40R19',axle:'2.81',drive:'prop',gears:'4.714,3.143,2.106,1.667,1.285,1.000,0.839,0.667',cyl:'6',rpmMode:'obd',gear:'8',rpmMan:'2000',motor:'9.0',spdMode:'gps',units:'mph',spdMan:'70',simSrc:'T1',tol:'6',minA:'6'};
 let S={...DEF};
-try{Object.assign(S,JSON.parse(localStorage.getItem('ordertrace')||'{}'))}catch(e){}
-const save=()=>{try{localStorage.setItem('ordertrace',JSON.stringify(S))}catch(e){}};
+try{Object.assign(S,JSON.parse(localStorage.getItem('ordertrace2')||'{}'))}catch(e){}
+const save=()=>{try{localStorage.setItem('ordertrace2',JSON.stringify(S))}catch(e){}};
 const SRC={tyre:{c:'var(--tyre)',n:'Tyre / wheel'},shaft:{c:'var(--shaft)',n:'Propshaft'},engine:{c:'var(--engine)',n:'Engine'},motor:{c:'var(--motor)',n:'Electric motor'}};
 const G=9.80665, N=256, M=1024, KEYS=['T1','T2','T3','D1','D2','E05','E1','E2','M1'];
 
@@ -333,7 +334,7 @@ new ResizeObserver(drawAll).observe(document.body);
 function toggleRec(){recording=!recording;if(recording){log=[];recStart=performance.now()}else if(marking){marking=false;$('markBtn').classList.remove('on');$('markBtn').textContent='I can feel it now'}
  $('recBtn').textContent=recording?'Stop recording':'Record';$('recBtn').classList.toggle('rec',recording);if(!recording)$('recInfo').textContent=log.length?`Saved ${log.length} samples. See Results`:''}
 const GUIDE={tyre:['Balance all four wheels; road-force balance if the shake survives a normal balance.','Check radial and lateral runout of tyre and rim; rotate front to rear to see if the shake moves.','Look for flat spots, bulges, belt separation, uneven wear, or a bent rim.','Check hub-centric rings, wheel seating, and torque. T2/T3 usually means out-of-round, not imbalance.'],
- shaft:['Mark and rotate the propshaft 180° on its flange to cancel stacked imbalance.','Inspect U-joints and the centre bearing for play or roughness.','D2 usually points to unequal working angles: measure them with the inclinometer (each joint ideally within 0.5° of its partner, under about 3°).','Check pinion and gearbox mounts, and any missing balance weights.'],
+ shaft:['Mark and rotate the propshaft 180° on its flange to cancel stacked imbalance.','Inspect U-joints and the centre bearing for play or roughness.','D2 usually points to unequal working angles: measure them with the inclinometer (each joint ideally within 0.5° of its partner, under about 3°).','Check pinion and gearbox mounts, and any missing balance weights.','xDrive: the front propshaft turns at the same speed as the rear, so D1/D2 can come from either. Check both, and the transfer case.'],
  engine:['E1: crank pulley, flywheel/flexplate, torque converter or ancillary imbalance.','Firing order: misfire, worn or collapsed engine/gearbox mounts, exhaust touching the body.','E½: one cylinder weaker than the rest (compression, injector, coil).','Confirm by revving in neutral: a speed-related shake disappears, an rpm-related one stays.'],
  motor:['Inspect motor and reducer mounts.','Check driveshaft (half-shaft) CV joints for wear.','Compare in regen vs drive to see if load changes the vibration.'],
  unmatched:['A strong peak not tied to speed or rpm is often a body, seat, mirror or steering-column resonance, or something running constantly (fan, pump, idle). A parked baseline removes it.','Recheck tyre size, axle ratio and gear; a wrong number shifts every order line.','If you felt it but nothing shows, it may be above the phone\'s range (fast engine orders) or below the threshold; lower Minimum peak.','Brake judder shows mainly when braking; test with and without the brakes.']};
