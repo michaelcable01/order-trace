@@ -61,6 +61,7 @@ details li{margin:4px 0}
 .mark{display:block;width:100%;min-height:92px;border-radius:16px;border:2px solid var(--hit);background:#2a1416;color:#ffd0d0;font-family:inherit;font-size:22px;font-weight:700;line-height:1.2;margin-bottom:12px;padding:10px}
 .mark.on{background:var(--hit);color:#fff}
 @media(prefers-reduced-motion:no-preference){.mark.on{animation:pulse 1.4s ease-in-out infinite}@keyframes pulse{50%{box-shadow:0 0 0 8px rgba(255,77,77,.25)}}}
+.cgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.cgrid button{min-height:76px;border-radius:12px;background:#0f1318;border:2px solid #33404f;color:var(--dim);font-family:inherit;font-size:14px;text-align:left;padding:10px}.cgrid button b{display:block;font-size:20px;color:var(--ink)}.cgrid button.sel{border-color:var(--ink);background:#1b222c}
 .gauge{font:700 56px/1 ui-rounded,-apple-system,sans-serif;text-align:center;font-variant-numeric:tabular-nums;margin:8px 0}
 @media(prefers-reduced-motion:no-preference){.verdict{transition:background .3s}}
 @media(max-width:420px){.ord{grid-template-columns:6.5em 4em minmax(0,1fr) 3.4em;font-size:13px}}
@@ -140,6 +141,15 @@ details li{margin:4px 0}
 </section>
 
 <section class="view" id="v-tools">
+  <div class="card"><h2>Corner test: which corner is it?</h2>
+    <p class="muted" style="margin-top:0">Put the phone flat and firm on the floor at one corner (footwells, or boot corners for the rear), screen facing up. Start a run, drive the same route through the speeds where you feel it, then stop once parked. Repeat for each corner with the same mounting. Include some steady acceleration and some lifting off (no brakes) at each speed.</p>
+    <p class="muted" style="text-align:center;margin:0 0 6px">▲ Front of car</p>
+    <div class="cgrid" id="cGrid"></div>
+    <div class="row" style="margin-top:10px"><button class="b pri" id="cRunBtn">Start run</button><button class="b" id="cDelBtn">Delete this corner</button></div>
+    <p class="muted" id="cInfo"></p>
+    <div id="cOut"></div>
+    <div class="fig" style="height:190px;margin-top:10px"><canvas id="cChart"></canvas></div>
+  </div>
   <div class="card"><h2>Inclinometer (propshaft / U-joint angles)</h2>
     <div class="gauge" id="incl">—°</div>
     <p class="muted" style="text-align:center;margin:0">Lay the phone's long edge along the shaft or flange. Zero on one, read the next to get the working angle.</p>
@@ -176,7 +186,7 @@ ids.forEach(k=>{const el=$(k);if(!el)return;el.addEventListener('change',()=>{S[
 syncUI();
 
 /* ---------- tabs ---------- */
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+b.dataset.v));if(b.dataset.v==='res')renderRes();drawAll()});
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+b.dataset.v));if(b.dataset.v==='res')renderRes();if(b.dataset.v==='tools')cUI();drawAll()});
 
 /* ---------- state ---------- */
 const buf={t:[],x:[],y:[],z:[]};
@@ -289,6 +299,7 @@ function loop(){if(!running)return;const v=speedMps(),rpm=rpmNow(v),sp=spectrum(
   else if(best&&!best.fixed){const[n,s]=OI(best.k);$('vDot').style.background=SRC[s].c;$('vTxt').textContent=`Possible ${n} (${best.mean.toFixed(0)} mg). Speed up or slow down by 5–10 ${uName()} to confirm it follows`}
   else if(top){$('vDot').style.background='var(--dim)';const hi=lastOrders.filter(x=>x.f>=sp.fs/2).map(x=>x.k);$('vTxt').textContent=`Peak at ${top.f.toFixed(1)} Hz isn't following any order`+(sp.based?'':'. Capture a parked baseline to remove constant tones')+(hi.length?`. ${hi.join(', ')} are above the sensor range and can fold back as false peaks.`:'.')}
   else{$('vDot').style.background='var(--ok)';$('vTxt').textContent='No significant vibration'}
+  if(cRun)cornerPush(v,o);
   if(recording){const row={t:(performance.now()-recStart)/1000,v:fromMps(v),rpm:rpm||0,f:top?top.f:0,a:top?top.a:0,mark:marking?1:0,o,j:best?(best.k+(best.conf?'*':best.fixed?'x':'?')):''};log.push(row);
    $('recInfo').textContent=`${Math.round(row.t)} s · ${log.length} samples`}
   if(marking)$('markBtn').textContent=`Feeling it… ${Math.round((performance.now()-markT0)/1000)} s. Tap when it stops`;
@@ -330,7 +341,7 @@ function drawVs(){const c=$('vsChart');if(!c.offsetParent)return;const[x,W,H]=ct
  x.strokeStyle=css('--hit');x.setLineDash([2,3]);x.beginPath();x.moveTo(30,Y(+S.minA));x.lineTo(W-4,Y(+S.minA));x.stroke();x.setLineDash([]);
  keys.forEach(k=>{x.beginPath();lines[k].forEach((p,i)=>{i?x.lineTo(X(p[0]),Y(p[1])):x.moveTo(X(p[0]),Y(p[1]))});x.strokeStyle=css('--'+OI(k)[1]);x.lineWidth=1.6;x.stroke();const l=lines[k].reduce((a,b)=>b[1]>a[1]?b:a);x.fillStyle=css('--'+OI(k)[1]);x.fillText(k,Math.min(W-24,X(l[0])+3),Y(l[1])-3)});
  if(!keys.length){x.fillStyle=css('--dim');x.fillText(`No order went above ${S.minA} mg`,40,H/2)}}
-function drawAll(){drawSpec();drawTrend();drawVs()}
+function drawAll(){drawSpec();drawTrend();drawVs();if(typeof drawCorner==='function')drawCorner()}
 new ResizeObserver(drawAll).observe(document.body);
 
 /* ---------- recording & results ---------- */
@@ -374,6 +385,45 @@ function spdChk(){const d=+$('indic').value;if(!d||gpsMps==null){return}const g=
 $('indic').addEventListener('input',spdChk);
 
 try{baseline=JSON.parse(localStorage.getItem('ordertrace_base')||'null')}catch(e){}baseUI();
+/* ---------- corner test: one run per corner, compared at matched speeds ---------- */
+const CORN=['FL','FR','RL','RR'],CN={FL:'Front left',FR:'Front right',RL:'Rear left',RR:'Rear right'},CC={FL:'#4ea8ff',FR:'#ff7a45',RL:'#3ddc97',RR:'#e6c84f'};
+let corners={},cSel='FL',cRun=null;
+try{corners=JSON.parse(localStorage.getItem('ordertrace_corners')||'{}')||{}}catch(e){corners={}}
+const cSave=()=>{try{localStorage.setItem('ordertrace_corners',JSON.stringify(corners))}catch(e){}};
+const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
+function cornerPush(v,o){const now=performance.now()/1000,old=vh.find(x=>now-x.t<=2.5)||vh[0],acc=old&&now-old.t>.8?(v-old.v)/(now-old.t):0;
+ const st=acc>.25?'P':acc<-.25?'C':'S';cRun.rows.push([+fromMps(v).toFixed(1),o.T1?+o.T1.a.toFixed(1):null,o.T2?+o.T2.a.toFixed(1):null,o.D1?+o.D1.a.toFixed(1):null,st]);
+ const s=Math.round(now-cRun.t0);$('cInfo').textContent=`Recording ${CN[cRun.pos]}: ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')} · ${cRun.rows.length} samples · ${fromMps(v).toFixed(0)} ${uName()}`}
+function cCompare(){const have=CORN.filter(k=>corners[k]&&corners[k].rows.length>=10);if(!have.length)return null;const bw=5,band={};
+ have.forEach(k=>corners[k].rows.forEach(r=>{if(r[1]==null||r[0]<20)return;const b=Math.floor(r[0]/bw)*bw;band[b]=band[b]||{};(band[b][k]=band[b][k]||[]).push(r[1])}));
+ const bands=Object.keys(band).map(Number).sort((a,b)=>a-b),tbl=bands.map(b=>({b,vals:Object.fromEntries(have.map(k=>[k,band[b][k]&&band[b][k].length>=4?mean(band[b][k]):null]))}));
+ const common=tbl.filter(t=>Object.values(t.vals).filter(x=>x!=null).length>=2),score={};
+ have.forEach(k=>{const rs=common.filter(t=>t.vals[k]!=null).map(t=>t.vals[k]/mean(Object.values(t.vals).filter(x=>x!=null)));score[k]=rs.length?mean(rs):null});
+ const P=[],C=[];bands.forEach(b=>{const p=[],c=[];have.forEach(k=>corners[k].rows.forEach(r=>{if(r[1]==null||Math.floor(r[0]/bw)*bw!==b)return;if(r[4]==='P')p.push(r[1]);if(r[4]==='C')c.push(r[1])}));if(p.length>=3&&c.length>=3){P.push(mean(p));C.push(mean(c))}});
+ return{have,tbl,common,score,load:P.length?{ratio:mean(P.map((p,i)=>(p+1)/(C[i]+1))),bands:P.length,p:mean(P),c:mean(C)}:null}}
+function cUI(){
+ $('cGrid').innerHTML=CORN.map(k=>{const c=corners[k],v=c&&c.rows.map(r=>r[0]).filter(x=>x>1);return`<button data-c="${k}" class="${k===cSel?'sel':''}" style="border-left:6px solid ${CC[k]}"><b>${k}</b>${c?`${Math.round(c.rows.length/2/60*10)/10} min · ${v.length?Math.min(...v).toFixed(0)+'–'+Math.max(...v).toFixed(0)+' '+uName():'not moving'}`:'Not recorded'}</button>`}).join('');
+ document.querySelectorAll('#cGrid button').forEach(b=>b.onclick=()=>{if(cRun)return;cSel=b.dataset.c;cUI()});
+ $('cRunBtn').textContent=cRun?`Stop and save ${cRun.pos}`:`Start run: ${CN[cSel]}`;$('cRunBtn').classList.toggle('rec',!!cRun);$('cDelBtn').style.display=corners[cSel]&&!cRun?'':'none';
+ if(!cRun)$('cInfo').textContent=corners[cSel]?`${CN[cSel]} saved. Starting a new run replaces it.`:'Mount the phone at this corner, then start.';
+ const r=cCompare();if(!r){$('cOut').innerHTML='';drawCorner();return}const u=uName(),out=[];
+ const ranked=r.have.filter(k=>r.score[k]!=null).sort((a,b)=>r.score[b]-r.score[a]);
+ if(ranked.length>=2){const a=ranked[0],b=ranked[1],x=r.score[a]/r.score[b];out.push(x>=1.3?`<b style="color:${CC[a]}">Strongest at ${CN[a]}</b>: wheel-speed (T1) vibration ${x.toFixed(1)}× the next corner (${CN[b]}) at matched speeds.`:`No clear winner yet: ${CN[a]} and ${CN[b]} are within ${Math.round((x-1)*100)}% of each other.`);
+  const f=['FL','FR'].filter(k=>r.score[k]!=null),re=['RL','RR'].filter(k=>r.score[k]!=null);if(f.length&&re.length){const fr=mean(f.map(k=>r.score[k]))/mean(re.map(k=>r.score[k]));out.push(fr>1.2?'Front stronger than rear.':fr<1/1.2?'Rear stronger than front.':'Front and rear similar.')}}
+ else out.push('Record at least two corners over the same speeds to compare.');
+ if(r.load){const x=r.load.ratio;out.push(`<b>Load test</b>: T1 averages ${r.load.p.toFixed(0)} mg while accelerating vs ${r.load.c.toFixed(0)} mg while lifting off, at the same speeds (${r.load.bands} speed bands). `+(x>=1.4?'It gets clearly worse under power, which points to the driveline (half-shaft / CV joint) rather than a wheel, hub or disc.':x<=1/1.4?'It is stronger off throttle, which is unusual. Check for play in the joints or bushes.':'Load makes little difference, which points to a rotating imbalance (rim, hub seating, disc) rather than a CV joint.'))}
+ else out.push('Load test: needs both accelerating and lifting off (no brakes) through the same speeds.');
+ const tb=r.tbl.filter(t=>Object.values(t.vals).some(x=>x!=null));
+ $('cOut').innerHTML=out.map(s=>`<p style="margin:10px 0 0">${s}</p>`).join('')+(tb.length?`<div class="scroll" style="margin-top:10px"><table><tr><th>${u}</th>${r.have.map(k=>`<th class="num">${k}</th>`).join('')}</tr>${tb.map(t=>{const mx=Math.max(...Object.values(t.vals).filter(x=>x!=null));return`<tr><td>${t.b}–${t.b+5}</td>${r.have.map(k=>`<td class="num"${t.vals[k]!=null&&t.vals[k]===mx&&Object.values(t.vals).filter(x=>x!=null).length>1?` style="color:${CC[k]};font-weight:700"`:''}>${t.vals[k]==null?'':t.vals[k].toFixed(0)}</td>`).join('')}</tr>`}).join('')}</table></div><p class="muted" style="margin:6px 0 0">T1 in mg, averaged per 5 ${u} band. Strongest corner per band in colour.</p>`:'');
+ drawCorner()}
+function drawCorner(){const c=$('cChart');if(!c||!c.offsetParent)return;const[x,W,H]=ctx(c),r=cCompare();x.font='11px -apple-system,sans-serif';x.fillStyle=css('--dim');if(!r){x.fillText('No corner runs yet',10,H/2);return}
+ let vm=10,am=20;r.tbl.forEach(t=>{vm=Math.max(vm,t.b+5);Object.values(t.vals).forEach(v=>{if(v!=null)am=Math.max(am,v)})});am*=1.1;axes(x,W,H,vm,am,`${uName()} →`);const X=v=>30+(W-34)*v/vm,Y=a=>8+(H-30)*(1-a/am);
+ r.have.forEach(k=>{const pts=r.tbl.filter(t=>t.vals[k]!=null).map(t=>[t.b+2.5,t.vals[k]]);if(!pts.length)return;x.beginPath();pts.forEach((p,i)=>i?x.lineTo(X(p[0]),Y(p[1])):x.moveTo(X(p[0]),Y(p[1])));x.strokeStyle=CC[k];x.lineWidth=2;x.stroke();const l=pts[pts.length-1];x.fillStyle=CC[k];x.fillText(k,Math.min(W-20,X(l[0])+3),Y(l[1])-3)})}
+$('cRunBtn').onclick=async()=>{if(cRun){if(cRun.rows.length>=10){corners[cRun.pos]={rows:cRun.rows,date:Date.now()};cSave()}else $('cInfo').textContent='Run too short to save.';cRun=null;cUI();return}
+ if(!running)await start();if(!running)return;cRun={pos:cSel,rows:[],t0:performance.now()/1000};cUI()};
+$('cDelBtn').onclick=()=>{delete corners[cSel];cSave();cUI()};
+cUI();
+
 document.addEventListener('visibilitychange',async()=>{if(running&&document.visibilityState==='visible'){try{wake=await navigator.wakeLock?.request('screen')}catch(e){}}});
 $('startBtn').onclick=start;$('recBtn').onclick=toggleRec;
 drawOrds();drawAll();renderRes();
