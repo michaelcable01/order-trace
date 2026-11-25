@@ -21,7 +21,7 @@ header small{color:var(--dim)}
 .view{display:none;padding:14px 16px;max-width:900px;margin:0 auto}
 .view.on{display:block}
 nav{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,1fr);background:#0a0d10;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
-nav button{background:none;border:0;color:var(--dim);font:600 13px/1 inherit;padding:16px 4px;min-height:56px}
+nav button{background:none;border:0;color:var(--dim);font-family:inherit;font-size:13px;font-weight:600;line-height:1;padding:16px 4px;min-height:56px}
 nav button.on{color:var(--ink);box-shadow:inset 0 3px 0 var(--tyre)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
 .card h2{font-size:15px;margin:0 0 10px;color:var(--dim);font-weight:600}
@@ -34,12 +34,12 @@ nav button.on{color:var(--ink);box-shadow:inset 0 3px 0 var(--tyre)}
 .fig{position:relative;height:230px}
 .fig canvas{position:absolute;inset:0;width:100%;height:100%}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-button.b{background:#222a35;color:var(--ink);border:1px solid #33404f;border-radius:10px;font:600 15px inherit;padding:0 16px;min-height:44px}
+button.b{background:#222a35;color:var(--ink);border:1px solid #33404f;border-radius:10px;font-family:inherit;font-size:15px;font-weight:600;padding:0 16px;min-height:44px}
 button.b.pri{background:var(--tyre);border-color:var(--tyre);color:#04121f}
 button.b.rec{background:var(--hit);border-color:var(--hit);color:#fff}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--tyre);outline-offset:2px}
 label{display:block;font-size:14px;color:var(--dim);margin:10px 0 4px}
-input,select{width:100%;background:#0f1318;color:var(--ink);border:1px solid #33404f;border-radius:10px;font:16px inherit;padding:10px 12px;min-height:44px}
+input,select{width:100%;background:#0f1318;color:var(--ink);border:1px solid #33404f;border-radius:10px;font-family:inherit;font-size:16px;padding:10px 12px;min-height:44px}
 .g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}
 .ord{display:grid;grid-template-columns:7.5em 4.5em minmax(0,1fr) 4em;gap:8px;align-items:center;font-size:14px;padding:5px 0;border-bottom:1px solid var(--line)}
 .ord:last-child{border:0}
@@ -58,6 +58,9 @@ details{border-top:1px solid var(--line);padding:10px 0}
 details summary{font-weight:600;cursor:pointer}
 details li{margin:4px 0}
 .chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;color:#071018}
+.mark{display:block;width:100%;min-height:92px;border-radius:16px;border:2px solid var(--hit);background:#2a1416;color:#ffd0d0;font-family:inherit;font-size:22px;font-weight:700;line-height:1.2;margin-bottom:12px;padding:10px}
+.mark.on{background:var(--hit);color:#fff}
+@media(prefers-reduced-motion:no-preference){.mark.on{animation:pulse 1.4s ease-in-out infinite}@keyframes pulse{50%{box-shadow:0 0 0 8px rgba(255,77,77,.25)}}}
 .gauge{font:700 56px/1 ui-rounded,-apple-system,sans-serif;text-align:center;font-variant-numeric:tabular-nums;margin:8px 0}
 @media(prefers-reduced-motion:no-preference){.verdict{transition:background .3s}}
 @media(max-width:420px){.ord{grid-template-columns:6.5em 4em minmax(0,1fr) 3.4em;font-size:13px}}
@@ -75,6 +78,8 @@ details li{margin:4px 0}
     <span class="muted" id="recInfo"></span>
   </div>
   <p class="muted" id="obdStat" style="margin:-4px 0 12px">OBD: not connected</p>
+  <button class="mark" id="markBtn">I can feel it now</button>
+  <div class="row" style="margin:0 0 12px"><button class="b" id="baseBtn">Capture baseline (parked)</button><button class="b" id="baseClr" style="display:none">Clear</button><span class="muted" id="baseInfo"></span></div>
   <div class="card">
     <div class="big">
       <div><b id="spd">0</b><span id="spdU">mph</span> <span id="spdSrc"></span></div>
@@ -85,7 +90,7 @@ details li{margin:4px 0}
     <div class="verdict" id="verdict"><span class="dot" id="vDot"></span><span id="vTxt">Waiting for data</span></div>
   </div>
   <div class="card"><h2>Spectrum with expected orders</h2><div class="fig"><canvas id="spec"></canvas></div>
-    <p class="muted" style="margin:8px 0 0">Vertical lines mark where each order should be at the current speed. A peak sitting on a line is your source. — means the order is above what the sensor can see.</p></div>
+    <p class="muted" style="margin:8px 0 0">Vertical lines mark where each order should be at the current speed. A source is only named when its peak follows the line as speed changes. — means the order is above what the sensor can see.</p></div>
   <div class="card"><h2>Order tracking (amplitude at each expected frequency)</h2><div id="ords"></div></div>
 </section>
 
@@ -115,7 +120,7 @@ details li{margin:4px 0}
       <div><label for="spdMode">Speed source</label><select id="spdMode"><option value="obd">OBD adapter (wheel speed)</option><option value="gps">GPS</option><option value="manual">Manual / steady cruise</option><option value="sim">Simulator (demo)</option></select></div>
       <div><label for="units">Units</label><select id="units"><option value="mph">mph</option><option value="kmh">km/h</option></select></div>
       <div><label for="spdMan">Manual / sim speed</label><input id="spdMan" inputmode="decimal"></div>
-      <div><label for="simSrc">Simulator fault</label><select id="simSrc"><option value="T1">Tyre imbalance (T1)</option><option value="T2">Tyre out-of-round (T2)</option><option value="D1">Propshaft imbalance (D1)</option><option value="D2">U-joint angle (D2)</option><option value="E2">Engine firing (E2)</option><option value="none">None (noise only)</option></select></div>
+      <div><label for="simSrc">Simulator fault</label><select id="simSrc"><option value="T1">Tyre imbalance (T1)</option><option value="T2">Tyre out-of-round (T2)</option><option value="D1">Propshaft imbalance (D1)</option><option value="D2">U-joint angle (D2)</option><option value="E2">Engine firing (E2)</option><option value="T1+tone">Tyre imbalance + constant 24 Hz tone</option><option value="none">None (noise only)</option></select></div>
       <div><label for="tol">Match tolerance (%)</label><input id="tol" inputmode="decimal"></div>
       <div><label for="minA">Minimum peak (mg)</label><input id="minA" inputmode="decimal"></div>
     </div>
@@ -124,11 +129,13 @@ details li{margin:4px 0}
 </section>
 
 <section class="view" id="v-res">
-  <div class="card"><h2>Recording summary</h2><div id="sumTop" class="muted">No recording yet. Press Record on the Live tab during a road test.</div>
-    <div class="scroll"><table id="sumTbl"></table></div>
+  <div class="card"><h2>Recording summary</h2><div id="sumTop"></div>
+    <h2 style="margin-top:14px">While you felt it</h2><div class="scroll"><table id="markTbl"></table></div>
+    <h2 style="margin-top:14px">Orders across the drive</h2><div class="scroll"><table id="sumTbl"></table></div>
     <div class="row" style="margin-top:12px"><button class="b" id="csvBtn">Download CSV</button><button class="b" id="copyBtn">Copy CSV</button><button class="b" id="clrBtn">Clear</button></div>
   </div>
-  <div class="card"><h2>Vibration over the drive</h2><div class="fig" style="height:180px"><canvas id="trend"></canvas></div></div>
+  <div class="card"><h2>Order amplitude vs speed</h2><div class="fig" style="height:200px"><canvas id="vsChart"></canvas></div><p class="muted" style="margin:8px 0 0">A real fault rises and falls smoothly with speed. Red dashes: detection threshold.</p></div>
+  <div class="card"><h2>Drive timeline</h2><div class="fig" style="height:170px"><canvas id="trend"></canvas></div><p class="muted" style="margin:8px 0 0">Blue: speed · white dots: biggest peak (mg) · red bands: when you pressed the button.</p></div>
   <div class="card"><h2>What to check</h2><div id="guide"></div></div>
 </section>
 
@@ -157,7 +164,7 @@ let S={...DEF};
 try{Object.assign(S,JSON.parse(localStorage.getItem('ordertrace')||'{}'))}catch(e){}
 const save=()=>{try{localStorage.setItem('ordertrace',JSON.stringify(S))}catch(e){}};
 const SRC={tyre:{c:'var(--tyre)',n:'Tyre / wheel'},shaft:{c:'var(--shaft)',n:'Propshaft'},engine:{c:'var(--engine)',n:'Engine'},motor:{c:'var(--motor)',n:'Electric motor'}};
-const G=9.80665, N=256, M=1024;
+const G=9.80665, N=256, M=1024, KEYS=['T1','T2','T3','D1','D2','E05','E1','E2','M1'];
 
 /* ---------- settings UI ---------- */
 const ids=Object.keys(DEF);
@@ -172,9 +179,9 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.query
 
 /* ---------- state ---------- */
 const buf={t:[],x:[],y:[],z:[]};
-let gpsMps=null,running=false,simTimer=null,simT=0,fs=0,lastSpec=null,lastOrders=[],recording=false,log=[],recStart=0,grav={x:0,y:0,z:-G},zeroAng=null,wake=null;
+let gpsMps=null,running=false,simTimer=null,simT=0,simPh=0,fs=0,lastSpec=null,lastOrders=[],recording=false,log=[],recStart=0,hist=[],vh=[],marking=false,markT0=0,baseCap=null,baseline=null,grav={x:0,y:0,z:-G},zeroAng=null,wake=null;
 const toMps=v=>S.units==='mph'?v*0.44704:v/3.6, fromMps=v=>S.units==='mph'?v/0.44704:v*3.6;
-function speedMps(){if(S.spdMode==='obd')return obdFresh()&&OBD.kmh!=null?OBD.kmh/3.6:0;if(S.spdMode==='gps')return gpsMps??0;return toMps(+S.spdMan||0)}
+function speedMps(){if(S.spdMode==='obd')return obdFresh()&&OBD.kmh!=null?OBD.kmh/3.6:0;if(S.spdMode==='gps')return gpsMps??0;const b=toMps(+S.spdMan||0);return S.spdMode==='sim'?b*(1+.12*Math.sin(performance.now()/1000*2*Math.PI/40)):b}
 function rpmNow(v){const t=tireDims();if(!t||S.drive==='ev')return null;if(S.rpmMode==='manual')return +S.rpmMan||0;if(S.rpmMode==='obd')return obdFresh()?OBD.rpm:null;const g=S.gears.split(/[,\s]+/).map(Number).filter(x=>x>0)[+S.gear-1]||1;return v/t.c*60*(+S.axle||1)*g}
 function orders(v,rpm){const t=tireDims();if(!t)return[];const w=v/t.c,ax=+S.axle||1,o=[
  {k:'T1',n:'Tyre 1st',s:'tyre',f:w},{k:'T2',n:'Tyre 2nd',s:'tyre',f:2*w},{k:'T3',n:'Tyre 3rd',s:'tyre',f:3*w}];
@@ -220,7 +227,7 @@ $('obdBtn').onclick=obdConnect;
 /* ---------- sensors ---------- */
 function msg(t){$('msg').textContent=t;$('msg').classList.toggle('on',!!t)}
 function onMotion(e){const a=e.acceleration&&e.acceleration.x!=null?e.acceleration:e.accelerationIncludingGravity;if(!a||a.x==null)return;push(performance.now(),a.x,a.y,a.z);const g=e.accelerationIncludingGravity;if(g&&g.x!=null){const k=.1;grav.x+=k*(g.x-grav.x);grav.y+=k*(g.y-grav.y);grav.z+=k*(g.z-grav.z);inclUpd()}}
-function push(t,x,y,z){buf.t.push(t);buf.x.push(x);buf.y.push(y);buf.z.push(z);if(buf.t.length>N*2){for(const k in buf)buf[k].splice(0,buf.t.length-N)}}
+function push(t,x,y,z){buf.t.push(t);buf.x.push(x);buf.y.push(y);buf.z.push(z);if(buf.t.length>N*2){const n=buf.t.length-N;for(const k in buf)buf[k].splice(0,n)}}
 async function start(){
  if(running){stop();return}
  msg('');
@@ -236,7 +243,7 @@ async function start(){
 }
 let geoId=null,loopT=null;
 function stop(){running=false;window.removeEventListener('devicemotion',onMotion);if(geoId!=null)navigator.geolocation.clearWatch(geoId);geoId=null;clearInterval(simTimer);clearTimeout(loopT);try{wake&&wake.release()}catch(e){}if(recording)toggleRec();$('startBtn').textContent='Start sensors';$('recBtn').disabled=true}
-function startSim(){const sfs=60;let t0=performance.now();simT=0;simTimer=setInterval(()=>{const now=performance.now();while(t0<now){simT+=1/sfs;t0+=1000/sfs;const v=speedMps(),o=orders(v,rpmNow(v)),f=(o.find(x=>x.k===S.simSrc)||{}).f||0,a=S.simSrc==='none'?0:0.22*Math.min(1,v/25);const s=a*Math.sin(2*Math.PI*f*simT)+(Math.random()-.5)*0.12+0.05*Math.sin(2*Math.PI*1.3*simT);push(t0,s*.3,s*.2+(Math.random()-.5)*.05,s)}grav={x:0,y:-2,z:-9.6};inclUpd()},50)}
+function startSim(){const sfs=60;let t0=performance.now();simT=0;simTimer=setInterval(()=>{const now=performance.now();while(t0<now){simT+=1/sfs;t0+=1000/sfs;const v=speedMps(),o=orders(v,rpmNow(v)),f=(o.find(x=>x.k===S.simSrc.slice(0,2))||{}).f||0,a=S.simSrc==='none'?0:0.22*Math.min(1,v/25);simPh+=2*Math.PI*f/sfs;const s=a*Math.sin(simPh)+(S.simSrc.endsWith('tone')?0.45*Math.sin(2*Math.PI*23.9*simT):0)+(Math.random()-.5)*0.12+0.05*Math.sin(2*Math.PI*1.3*simT);push(t0,s*.3,s*.2+(Math.random()-.5)*.05,s)}grav={x:0,y:-2,z:-9.6};inclUpd()},50)}
 
 /* ---------- FFT ---------- */
 function fft(re,im){const n=re.length;for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]]}}
@@ -244,23 +251,50 @@ function fft(re,im){const n=re.length;for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j
 const hann=Float64Array.from({length:N},(_,i)=>0.5-0.5*Math.cos(2*Math.PI*i/(N-1)));const hs=hann.reduce((a,b)=>a+b,0);
 function spectrum(){const L=buf.t.length;if(L<N)return null;const t=buf.t.slice(L-N);fs=(N-1)/((t[N-1]-t[0])/1000);const pw=new Float64Array(M/2);
  for(const ax of['x','y','z']){const d=buf[ax].slice(L-N),m=d.reduce((a,b)=>a+b,0)/N,re=new Float64Array(M),im=new Float64Array(M);for(let i=0;i<N;i++)re[i]=(d[i]-m)*hann[i];fft(re,im);for(let k=0;k<M/2;k++)pw[k]+=re[k]*re[k]+im[k]*im[k]}
- const amp=Array.from(pw,p=>Math.sqrt(p)*2/hs/G*1000);return{amp,df:fs/M,fs}}
-function ampAt(sp,f){const k=Math.round(f/sp.df);let m=0;for(let i=Math.max(0,k-2);i<=Math.min(sp.amp.length-1,k+2);i++)m=Math.max(m,sp.amp[i]);return m}
+ const raw=Array.from(pw,p=>Math.sqrt(p)*2/hs/G*1000);let amp=raw,based=false;
+ if(baseline&&baseline.amp.length===raw.length&&Math.abs(baseline.fs-fs)/fs<.15){const b=baseline.amp;based=true;
+  amp=raw.map((a,i)=>{let m=0;for(let j=Math.max(0,i-4);j<=Math.min(b.length-1,i+4);j++)m=Math.max(m,b[j]);return Math.max(0,a-1.3*m)})}
+ return{amp,raw,based,df:fs/M,fs}}
+/* strongest response within ±tolerance of an expected order frequency */
+function orderAmp(sp,f){if(f<3||f>=sp.fs/2*.95)return null;const tol=(+S.tol||6)/100,lo=Math.max(1,Math.floor(f*(1-tol)/sp.df)),hi=Math.min(sp.amp.length-1,Math.ceil(f*(1+tol)/sp.df));let m=0,mi=lo;for(let i=lo;i<=hi;i++)if(sp.amp[i]>m){m=sp.amp[i];mi=i}return{a:m,f:mi*sp.df,fe:f}}
 function peaks(sp){const a=sp.amp,lo=Math.ceil(3/sp.df),out=[],sorted=[...a.slice(lo)].sort((x,y)=>x-y),floor=sorted[sorted.length>>1]||0;
  for(let i=lo+1;i<a.length-1;i++)if(a[i]>a[i-1]&&a[i]>=a[i+1]&&a[i]>Math.max(+S.minA||0,floor*4))out.push({f:i*sp.df,a:a[i]});return out.sort((x,y)=>y.a-x.a).slice(0,3)}
-function match(p,o){let best=null;for(const x of o){if(x.f>=fs/2)continue;const e=Math.abs(p.f-x.f)/x.f;if(e*100<=(+S.tol||6)&&(!best||e<best.e))best={...x,e}}return best}
+/* Tracking test: an order is only CONFIRMED when it stays strong while its expected
+   frequency changes by >=12% and the measured peak keeps a constant ratio to it.
+   A fixed-frequency tone that an order line merely sweeps past fails this. */
+function judge(rows){const thr=+S.minA||6,res=[];
+ for(const k of KEYS){const s=rows.map(r=>r.o[k]).filter(Boolean);if(s.length<8)continue;const li=rows.filter(r=>r.o[k]&&r.o[k].a>=thr);if(li.length<6||li.length/s.length<.6)continue;
+  const fe=li.map(r=>r.o[k].fe),fm=li.map(r=>r.o[k].f),me=fe.reduce((a,b)=>a+b,0)/fe.length,mm=fm.reduce((a,b)=>a+b,0)/fm.length,
+   ve=fe.reduce((a,b)=>a+(b-me)**2,0),cv=fe.reduce((a,b,i)=>a+(b-me)*(fm[i]-mm),0),slope=ve?cv/ve:0,span=(Math.max(...fe)-Math.min(...fe))/me,vs=li.map(r=>r.v),tested=span>=.12;
+  res.push({k,mean:li.reduce((a,r)=>a+r.o[k].a,0)/li.length,max:Math.max(...li.map(r=>r.o[k].a)),n:li.length,span,slope,conf:tested&&slope>=.6&&slope<=1.5,fixed:tested&&slope<.3,unclear:tested&&(slope>=.3&&slope<.6||slope>1.5),vmin:Math.min(...vs),vmax:Math.max(...vs)})}
+ return res.sort((a,b)=>(b.conf-a.conf)||(a.fixed-b.fixed)||(b.mean-a.mean))}
+const OI=k=>({T1:['Tyre 1st','tyre'],T2:['Tyre 2nd','tyre'],T3:['Tyre 3rd','tyre'],D1:['Propshaft 1st','shaft'],D2:['Propshaft 2nd','shaft'],E05:['Engine ½','engine'],E1:['Engine 1st','engine'],E2:['Engine firing','engine'],M1:['Motor 1st','motor']})[k];
 
 /* ---------- loop ---------- */
-function loop(){if(!running)return;const v=speedMps(),rpm=rpmNow(v),sp=spectrum();lastOrders=orders(v,rpm);
+function loop(){if(!running)return;const v=speedMps(),rpm=rpmNow(v),sp=spectrum(),tn=performance.now()/1000;vh.push({t:tn,v,r:rpm||0});const win=sp?N/sp.fs:4.3;while(vh.length&&tn-vh[0].t>win)vh.shift();
+ const va=vh.reduce((a,x)=>a+x.v,0)/vh.length,ra=rpm==null?null:vh.reduce((a,x)=>a+x.r,0)/vh.length;lastOrders=orders(va,ra);
  $('spd').textContent=fromMps(v).toFixed(0);$('spdSrc').textContent=S.spdMode==='obd'?(obdFresh()?'· OBD':'· OBD waiting'):S.spdMode==='gps'?(gpsMps==null?'· GPS searching':'· GPS'):S.spdMode==='sim'?'· sim':'· manual';$('rpm').textContent=rpm?Math.round(rpm):'—';$('rpmL').textContent='rpm'+(gearEst(v,rpm)?' · gear ≈ '+gearEst(v,rpm):'');
- if(sp){lastSpec=sp;$('fsTag').textContent=`${sp.fs.toFixed(0)} Hz · sees to ${(sp.fs/2).toFixed(0)} Hz`;const pk=peaks(sp),top=pk[0],m=top&&match(top,lastOrders);
+ if(sp){lastSpec=sp;$('fsTag').textContent=`${sp.fs.toFixed(0)} Hz · sees to ${(sp.fs/2).toFixed(0)} Hz`;
+  if(baseCap){if(v>1){baseCap=null;$('baseInfo').textContent='Baseline cancelled — the car must be stationary'}else{sp.raw.forEach((a,i)=>baseCap.sum[i]+=a);baseCap.n++;const left=Math.ceil((baseCap.end-performance.now())/1000);
+   if(left<=0){baseline={fs:sp.fs,amp:Array.from(baseCap.sum,s=>+(s/baseCap.n).toFixed(2))};baseCap=null;try{localStorage.setItem('ordertrace_base',JSON.stringify(baseline))}catch(e){}}else $('baseInfo').textContent=`Capturing baseline… ${left} s (keep still, engine running)`}baseUI()}
+  const pk=peaks(sp),top=pk[0],t=performance.now()/1000,o={};lastOrders.forEach(x=>{const r=orderAmp(sp,x.f);if(r)o[x.k]=r});
+  hist.push({t,v:fromMps(v),o});while(hist.length&&t-hist[0].t>20)hist.shift();
+  const j=judge(hist),best=j[0];
   $('pkF').textContent=top?top.f.toFixed(1):'—';$('pkA').textContent=top?top.a.toFixed(0):'—';
-  if(!top){$('vDot').style.background='var(--ok)';$('vTxt').textContent='No significant vibration'}
-  else if(m){$('vDot').style.background=SRC[m.s].c;$('vTxt').textContent=`${SRC[m.s].n} — ${m.n} order (${m.f.toFixed(1)} Hz expected)`}
-  else{$('vDot').style.background='var(--dim)';const hi=lastOrders.filter(o=>o.f>=sp.fs/2).map(o=>o.k);$('vTxt').textContent=`Peak at ${top.f.toFixed(1)} Hz not tied to speed or rpm — check resonance, brakes or settings`+(hi.length?`. ${hi.join(', ')} are above the sensor range and can fold back as false peaks; retest at lower speed.`:'')}
-  if(recording){log.push({t:(performance.now()-recStart)/1000,v:fromMps(v),rpm:rpm||0,f:top?top.f:0,a:top?top.a:0,k:m?m.k:(top?'?':''),s:m?m.s:(top?'unmatched':'none')});$('recInfo').textContent=`${Math.round((performance.now()-recStart)/1000)} s · ${log.length} samples`}
+  if(best&&best.conf){const[n,s]=OI(best.k);$('vDot').style.background=SRC[s].c;$('vTxt').textContent=`${SRC[s].n}: ${n} order confirmed. It follows road/engine speed (${best.vmin.toFixed(0)}–${best.vmax.toFixed(0)} ${uName()}), avg ${best.mean.toFixed(0)} mg`}
+  else if(best&&!best.fixed){const[n,s]=OI(best.k);$('vDot').style.background=SRC[s].c;$('vTxt').textContent=`Possible ${n} (${best.mean.toFixed(0)} mg). Speed up or slow down by 5–10 ${uName()} to confirm it follows`}
+  else if(top){$('vDot').style.background='var(--dim)';const hi=lastOrders.filter(x=>x.f>=sp.fs/2).map(x=>x.k);$('vTxt').textContent=`Peak at ${top.f.toFixed(1)} Hz isn't following any order`+(sp.based?'':'. Capture a parked baseline to remove constant tones')+(hi.length?`. ${hi.join(', ')} are above the sensor range and can fold back as false peaks.`:'.')}
+  else{$('vDot').style.background='var(--ok)';$('vTxt').textContent='No significant vibration'}
+  if(recording){const row={t:(performance.now()-recStart)/1000,v:fromMps(v),rpm:rpm||0,f:top?top.f:0,a:top?top.a:0,mark:marking?1:0,o,j:best?(best.k+(best.conf?'*':best.fixed?'x':'?')):''};log.push(row);
+   $('recInfo').textContent=`${Math.round(row.t)} s · ${log.length} samples`}
+  if(marking)$('markBtn').textContent=`Feeling it… ${Math.round((performance.now()-markT0)/1000)} s. Tap when it stops`;
   drawSpec();drawOrds()}
  loopT=setTimeout(loop,500)}
+const uName=()=>S.units==='mph'?'mph':'km/h';
+function baseUI(){if(baseCap)return;$('baseInfo').textContent=baseline?`Baseline set (${baseline.fs.toFixed(0)} Hz). Constant tones are subtracted`:'No baseline yet. Capture one parked, engine idling';$('baseBtn').textContent=baseline?'Re-capture baseline':'Capture baseline (parked)';$('baseClr').style.display=baseline?'':'none'}
+$('baseBtn').onclick=()=>{if(!running){msg('Start sensors first, then capture the baseline while parked with the engine running.');return}baseCap={sum:new Float64Array(M/2),n:0,end:performance.now()+10000};$('baseInfo').textContent='Capturing baseline… 10 s'};
+$('baseClr').onclick=()=>{baseline=null;try{localStorage.removeItem('ordertrace_base')}catch(e){}baseUI()};
+$('markBtn').onclick=()=>{if(!running){msg('Start sensors first.');return}if(!marking&&!recording)toggleRec();marking=!marking;markT0=performance.now();$('markBtn').classList.toggle('on',marking);if(!marking){$('markBtn').textContent='I can feel it now';$('recInfo').textContent=`Marked ${log.filter(r=>r.mark).length/2|0} s so far`}};
 
 /* ---------- drawing ---------- */
 function ctx(c){const r=c.getBoundingClientRect(),d=devicePixelRatio||1;c.width=r.width*d;c.height=r.height*d;const x=c.getContext('2d');x.scale(d,d);return[x,r.width,r.height]}
@@ -268,40 +302,62 @@ const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim
 function drawSpec(){const c=$('spec');if(!c.offsetParent)return;const[x,W,H]=ctx(c),sp=lastSpec;x.font='11px -apple-system,sans-serif';const pl=34,pb=20,fmax=sp?Math.min(sp.fs/2,60):30;
  x.strokeStyle=css('--line');x.fillStyle=css('--dim');for(let f=0;f<=fmax;f+=10){const px=pl+(W-pl-6)*f/fmax;x.beginPath();x.moveTo(px,6);x.lineTo(px,H-pb);x.stroke();x.fillText(f,px-6,H-5)}
  if(!sp){x.fillText('Start sensors to see the spectrum',pl+8,H/2);return}
- const kmax=Math.floor(fmax/sp.df),amax=Math.max(20,...sp.amp.slice(Math.ceil(3/sp.df),kmax))*1.15,yv=a=>H-pb-(H-pb-8)*a/amax;
+ const kmax=Math.floor(fmax/sp.df),lo=Math.ceil(3/sp.df),amax=Math.max(20,...sp.raw.slice(lo,kmax))*1.15,yv=a=>H-pb-(H-pb-8)*a/amax,X=k=>pl+(W-pl-6)*k*sp.df/fmax;
  x.fillText(amax.toFixed(0)+' mg',2,14);
  lastOrders.forEach(o=>{if(o.f>fmax)return;const px=pl+(W-pl-6)*o.f/fmax;x.strokeStyle=css('--'+o.s);x.setLineDash([4,4]);x.beginPath();x.moveTo(px,18);x.lineTo(px,H-pb);x.stroke();x.setLineDash([]);x.fillStyle=css('--'+o.s);x.fillText(o.k,px+2,16)});
- x.beginPath();for(let k=0;k<=kmax;k++){const px=pl+(W-pl-6)*k*sp.df/fmax,py=yv(sp.amp[k]);k?x.lineTo(px,py):x.moveTo(px,py)}x.strokeStyle=css('--ink');x.lineWidth=1.6;x.stroke();
- x.strokeStyle=css('--hit');x.setLineDash([2,3]);x.beginPath();x.moveTo(pl,yv(+S.minA));x.lineTo(W-6,yv(+S.minA));x.stroke();x.setLineDash([])}
+ if(sp.based){x.beginPath();for(let k=0;k<=kmax;k++){k?x.lineTo(X(k),yv(sp.raw[k])):x.moveTo(X(k),yv(sp.raw[k]))}x.strokeStyle=css('--dim');x.lineWidth=1;x.stroke()}
+ x.beginPath();for(let k=0;k<=kmax;k++){k?x.lineTo(X(k),yv(sp.amp[k])):x.moveTo(X(k),yv(sp.amp[k]))}x.strokeStyle=css('--ink');x.lineWidth=1.6;x.stroke();
+ x.strokeStyle=css('--hit');x.setLineDash([2,3]);x.beginPath();x.moveTo(pl,yv(+S.minA));x.lineTo(W-6,yv(+S.minA));x.stroke();x.setLineDash([]);
+ if(sp.based){x.fillStyle=css('--dim');x.fillText('grey: raw · white: minus baseline',pl+4,H-pb-4)}}
 function drawOrds(){const sp=lastSpec,o=lastOrders;if(!o.length){$('ords').innerHTML='<p class="muted">Check the tyre size on the Vehicle tab.</p>';return}
- const vals=o.map(x=>sp&&x.f<sp.fs/2?ampAt(sp,x.f):null),mx=Math.max(20,...vals.filter(v=>v!=null));
- $('ords').innerHTML=o.map((x,i)=>`<div class="ord"><span><span class="chip" style="background:${SRC[x.s].c}">${x.k}</span> ${x.n.replace(/^\S+ /,'')}</span><span class="num">${x.f.toFixed(1)} Hz</span><span class="bar"><i style="width:${vals[i]==null?0:Math.min(100,vals[i]/mx*100)}%;background:${SRC[x.s].c}"></i></span><span class="num">${vals[i]==null?'—':vals[i].toFixed(0)+' mg'}</span></div>`).join('')}
+ const vals=o.map(x=>sp?orderAmp(sp,x.f):null),mx=Math.max(20,...vals.filter(Boolean).map(v=>v.a));
+ $('ords').innerHTML=o.map((x,i)=>`<div class="ord"><span><span class="chip" style="background:${SRC[x.s].c}">${x.k}</span> ${x.n.replace(/^\S+ /,'')}</span><span class="num">${x.f.toFixed(1)} Hz</span><span class="bar"><i style="width:${vals[i]?Math.min(100,vals[i].a/mx*100):0}%;background:${SRC[x.s].c}"></i></span><span class="num">${vals[i]?vals[i].a.toFixed(0)+' mg':'—'}</span></div>`).join('')}
+function axes(x,W,H,xm,ym,xl){x.strokeStyle=css('--line');x.fillStyle=css('--dim');x.font='11px -apple-system,sans-serif';for(let i=0;i<=4;i++){const py=8+(H-30)*i/4;x.beginPath();x.moveTo(30,py);x.lineTo(W-4,py);x.stroke();x.fillText((ym*(1-i/4)).toFixed(0),2,py+4)}x.fillText(xl,W-x.measureText(xl).width-4,H-4)}
 function drawTrend(){const c=$('trend');if(!c.offsetParent)return;const[x,W,H]=ctx(c);x.font='11px -apple-system,sans-serif';x.fillStyle=css('--dim');if(!log.length){x.fillText('No recording',10,H/2);return}
- const tm=log[log.length-1].t||1,am=Math.max(20,...log.map(l=>l.a)),vm=Math.max(10,...log.map(l=>l.v));
- x.beginPath();log.forEach((l,i)=>{const px=W*l.t/tm,py=H-14-(H-24)*l.v/vm;i?x.lineTo(px,py):x.moveTo(px,py)});x.strokeStyle=css('--dim');x.stroke();
- log.forEach(l=>{if(!l.a)return;const px=W*l.t/tm,py=H-14-(H-24)*l.a/am;x.fillStyle=l.s in SRC?css('--'+l.s):css('--ink');x.fillRect(px-1.5,py-1.5,3,3)});
- x.fillStyle=css('--dim');x.fillText(`grey line: speed (max ${vm.toFixed(0)}) · dots: peak mg, coloured by source · ${tm.toFixed(0)} s`,4,H-2)}
-function drawAll(){drawSpec();drawTrend()}
+ const tm=log[log.length-1].t||1,am=Math.max(20,...log.map(l=>l.a))*1.1,vm=Math.max(10,...log.map(l=>l.v))*1.1,X=t=>30+(W-34)*t/tm,Y=(a,m)=>8+(H-30)*(1-a/m);
+ x.fillStyle='rgba(255,77,77,.22)';log.forEach((l,i)=>{if(l.mark){const n=log[i+1];x.fillRect(X(l.t),8,Math.max(2,X(n?n.t:l.t+.5)-X(l.t)),H-30)}});
+ axes(x,W,H,tm,am,`${tm.toFixed(0)} s`);
+ x.beginPath();log.forEach((l,i)=>{i?x.lineTo(X(l.t),Y(l.v,vm)):x.moveTo(X(l.t),Y(l.v,vm))});x.strokeStyle=css('--tyre');x.lineWidth=1.5;x.stroke();
+ x.fillStyle=css('--ink');log.forEach(l=>{if(l.a)x.fillRect(X(l.t)-1,Y(l.a,am)-1,2.5,2.5)})}
+function drawVs(){const c=$('vsChart');if(!c.offsetParent)return;const[x,W,H]=ctx(c);x.font='11px -apple-system,sans-serif';x.fillStyle=css('--dim');if(!log.length){x.fillText('No recording',10,H/2);return}
+ const vm=Math.max(10,...log.map(l=>l.v)),bw=2,keys=KEYS.filter(k=>log.some(l=>l.o[k]&&l.o[k].a>=(+S.minA||6))),lines={};let am=20;
+ keys.forEach(k=>{const b={};log.forEach(l=>{if(!l.o[k])return;const i=Math.floor(l.v/bw);(b[i]=b[i]||[]).push(l.o[k].a)});lines[k]=Object.keys(b).map(Number).sort((a,b2)=>a-b2).map(i=>[i*bw+bw/2,b[i].reduce((a,c)=>a+c,0)/b[i].length]);lines[k].forEach(p=>am=Math.max(am,p[1]))});
+ am*=1.1;axes(x,W,H,vm,am,`${uName()} →`);const X=v=>30+(W-34)*v/vm,Y=a=>8+(H-30)*(1-a/am);
+ x.strokeStyle=css('--hit');x.setLineDash([2,3]);x.beginPath();x.moveTo(30,Y(+S.minA));x.lineTo(W-4,Y(+S.minA));x.stroke();x.setLineDash([]);
+ keys.forEach(k=>{x.beginPath();lines[k].forEach((p,i)=>{i?x.lineTo(X(p[0]),Y(p[1])):x.moveTo(X(p[0]),Y(p[1]))});x.strokeStyle=css('--'+OI(k)[1]);x.lineWidth=1.6;x.stroke();const l=lines[k].reduce((a,b)=>b[1]>a[1]?b:a);x.fillStyle=css('--'+OI(k)[1]);x.fillText(k,Math.min(W-24,X(l[0])+3),Y(l[1])-3)});
+ if(!keys.length){x.fillStyle=css('--dim');x.fillText(`No order went above ${S.minA} mg`,40,H/2)}}
+function drawAll(){drawSpec();drawTrend();drawVs()}
 new ResizeObserver(drawAll).observe(document.body);
 
 /* ---------- recording & results ---------- */
-function toggleRec(){recording=!recording;if(recording){log=[];recStart=performance.now()}$('recBtn').textContent=recording?'Stop recording':'Record';$('recBtn').classList.toggle('rec',recording);if(!recording)$('recInfo').textContent=log.length?`Saved ${log.length} samples — see Results`:''}
+function toggleRec(){recording=!recording;if(recording){log=[];recStart=performance.now()}else if(marking){marking=false;$('markBtn').classList.remove('on');$('markBtn').textContent='I can feel it now'}
+ $('recBtn').textContent=recording?'Stop recording':'Record';$('recBtn').classList.toggle('rec',recording);if(!recording)$('recInfo').textContent=log.length?`Saved ${log.length} samples. See Results`:''}
 const GUIDE={tyre:['Balance all four wheels; road-force balance if the shake survives a normal balance.','Check radial and lateral runout of tyre and rim; rotate front to rear to see if the shake moves.','Look for flat spots, bulges, belt separation, uneven wear, or a bent rim.','Check hub-centric rings, wheel seating, and torque. T2/T3 usually means out-of-round, not imbalance.'],
  shaft:['Mark and rotate the propshaft 180° on its flange to cancel stacked imbalance.','Inspect U-joints and the centre bearing for play or roughness.','D2 usually points to unequal working angles: measure them with the inclinometer (each joint ideally within 0.5° of its partner, under about 3°).','Check pinion and gearbox mounts, and any missing balance weights.'],
  engine:['E1: crank pulley, flywheel/flexplate, torque converter or ancillary imbalance.','Firing order: misfire, worn or collapsed engine/gearbox mounts, exhaust touching the body.','E½: one cylinder weaker than the rest (compression, injector, coil).','Confirm by revving in neutral: a speed-related shake disappears, an rpm-related one stays.'],
  motor:['Inspect motor and reducer mounts.','Check driveshaft (half-shaft) CV joints for wear.','Compare in regen vs drive to see if load changes the vibration.'],
- unmatched:['A strong peak not tied to speed or rpm is often a body, seat, mirror or steering-column resonance being excited.','Recheck tyre size, axle ratio and gear; a wrong number shifts every order line.','Brake judder shows mainly when braking; test with and without the brakes.']};
-function counts(){const c={};log.forEach(l=>{if(l.s!=='none')c[l.s]=(c[l.s]||0)+1});return c}
-function renderRes(){drawTrend();const c=counts(),hits=Object.values(c).reduce((a,b)=>a+b,0);
- if(!log.length){$('sumTop').textContent='No recording yet. Press Record on the Live tab during a road test.';$('sumTbl').innerHTML='';$('guide').innerHTML=guideHTML(Object.keys(GUIDE));return}
- const top=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];
- $('sumTop').innerHTML=hits?`Most likely source: <b style="color:${top[0] in SRC?SRC[top[0]].c:'var(--ink)'}">${top[0] in SRC?SRC[top[0]].n:'Unmatched resonance'}</b> — ${top[1]} of ${hits} vibration samples (${log.length} total).`:`No vibration above ${S.minA} mg in ${log.length} samples.`;
- const band=10,bands={};log.forEach(l=>{if(l.s==='none')return;const b=Math.floor(l.v/band)*band;(bands[b]=bands[b]||{})[l.k]=(bands[b][l.k]||0)+1});
- const keys=[...new Set(log.filter(l=>l.k).map(l=>l.k))];const u=S.units==='mph'?'mph':'km/h';
- $('sumTbl').innerHTML=keys.length?`<tr><th>Speed (${u})</th>${keys.map(k=>`<th class="num">${k}</th>`).join('')}</tr>`+Object.keys(bands).sort((a,b)=>a-b).map(b=>`<tr><td>${b}–${+b+band}</td>${keys.map(k=>`<td class="num">${bands[b][k]||''}</td>`).join('')}</tr>`).join(''):'';
- $('guide').innerHTML=guideHTML(Object.entries(c).sort((a,b)=>b[1]-a[1]).map(e=>e[0]))}
-function guideHTML(list){return list.filter(k=>GUIDE[k]).map((k,i)=>`<details ${i?'':'open'}><summary style="color:${k in SRC?SRC[k].c:'var(--ink)'}">${k in SRC?SRC[k].n:'Not matched to an order'}</summary><ul>${GUIDE[k].map(g=>`<li>${g}</li>`).join('')}</ul></details>`).join('')}
-function csv(){return 't_s,speed_'+S.units+',rpm,peak_hz,peak_mg,order,source\n'+log.map(l=>[l.t.toFixed(1),l.v.toFixed(1),Math.round(l.rpm),l.f.toFixed(2),l.a.toFixed(1),l.k,l.s].join(',')).join('\n')}
+ unmatched:['A strong peak not tied to speed or rpm is often a body, seat, mirror or steering-column resonance, or something running constantly (fan, pump, idle). A parked baseline removes it.','Recheck tyre size, axle ratio and gear; a wrong number shifts every order line.','If you felt it but nothing shows, it may be above the phone\'s range (fast engine orders) or below the threshold; lower Minimum peak.','Brake judder shows mainly when braking; test with and without the brakes.']};
+function fixedTones(){const thr=+S.minA||6,mv=log.filter(r=>r.a>=thr&&r.v>3);if(mv.length<20)return null;const b={};mv.forEach(r=>{const i=Math.round(r.f*2);(b[i]=b[i]||[]).push(r)});
+ const[i,rs]=Object.entries(b).sort((a,c)=>c[1].length-a[1].length)[0];const vs=rs.map(r=>r.v);return rs.length/mv.length>.4&&Math.max(...vs)-Math.min(...vs)>8?{f:i/2,pct:Math.round(rs.length/mv.length*100),a:rs.reduce((a,r)=>a+r.a,0)/rs.length}:null}
+const esc=s=>String(s).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
+function renderRes(){drawTrend();drawVs();
+ if(!log.length){$('sumTop').textContent='No recording yet. Start sensors, capture a parked baseline, then Record (or just press the big button when you feel it).';$('markTbl').innerHTML='';$('sumTbl').innerHTML='';$('guide').innerHTML=guideHTML(Object.keys(GUIDE));return}
+ const thr=+S.minA||6,u=uName(),j=judge(log),marked=log.filter(r=>r.mark),other=log.filter(r=>!r.mark&&r.v>3),out=[];let verdict=null;
+ if(marked.length){const rows=KEYS.map(k=>{const a=marked.map(r=>r.o[k]).filter(Boolean).map(x=>x.a),b=other.map(r=>r.o[k]).filter(Boolean).map(x=>x.a);if(!a.length)return null;const ma=a.reduce((s,x)=>s+x,0)/a.length,mb=b.length?b.reduce((s,x)=>s+x,0)/b.length:0;return{k,ma,mb,r:(ma+1)/(mb+1)}}).filter(Boolean).sort((a,b)=>b.r-a.r);
+  $('markTbl').innerHTML=`<tr><th>Order</th><th class="num">While felt</th><th class="num">Rest of drive</th><th class="num">Ratio</th></tr>`+rows.map(r=>`<tr><td>${r.k} ${OI(r.k)[0].replace(/ \S+$/,'')}</td><td class="num">${r.ma.toFixed(0)} mg</td><td class="num">${r.mb.toFixed(0)} mg</td><td class="num">${r.r.toFixed(1)}×</td></tr>`).join('');
+  const b=rows.find(r=>r.ma>=thr&&r.r>=1.5);const ms=marked.map(r=>r.v);
+  out.push(`You marked ${Math.round(marked.length/2)} s of vibration between ${Math.min(...ms).toFixed(0)} and ${Math.max(...ms).toFixed(0)} ${u}.`);
+  if(b){verdict=OI(b.k)[1];out.push(`<b style="color:${SRC[verdict].c}">It lines up best with ${OI(b.k)[0]} order (${b.k})</b>: ${b.ma.toFixed(0)} mg while you felt it, ${b.r.toFixed(1)}× the rest of the drive.`)}
+  else out.push('No order was clearly stronger while you felt it. The vibration may be above the phone\'s range (fast engine orders), too small for the threshold, or a body resonance.')}
+ else $('markTbl').innerHTML='<tr><td class="muted">No marked periods. Press the big button on the Live tab while you can feel the vibration.</td></tr>';
+ const c=j.find(x=>x.conf);if(c){out.push(`${marked.length?'Across the whole drive, ':''}<b style="color:${SRC[OI(c.k)[1]].c}">${OI(c.k)[0]} (${c.k}) was confirmed</b>: it followed speed from ${c.vmin.toFixed(0)}–${c.vmax.toFixed(0)} ${u}, averaging ${c.mean.toFixed(0)} mg.`);verdict=verdict||OI(c.k)[1]}
+ else if(!marked.length)out.push(`No order was confirmed following speed above ${thr} mg.`);
+ const ft=fixedTones();if(ft)out.push(`A constant ${ft.f.toFixed(1)} Hz tone (~${ft.a.toFixed(0)} mg) was the biggest peak in ${ft.pct}% of moving samples at all speeds. That isn't wheel or driveline vibration. ${baseline?'Re-capture the baseline if it is still showing.':'Capture a parked baseline so it gets removed.'}`);
+ $('sumTop').innerHTML=out.map(s=>`<p style="margin:0 0 8px">${s}</p>`).join('');
+ $('sumTbl').innerHTML=j.length?`<tr><th>Order</th><th class="num">Strong for</th><th>Speeds</th><th class="num">Peak</th><th>Follows speed?</th></tr>`+j.map(r=>`<tr><td>${r.k}</td><td class="num">${(r.n/2).toFixed(0)} s</td><td>${r.vmin.toFixed(0)}–${r.vmax.toFixed(0)}</td><td class="num">${r.max.toFixed(0)} mg</td><td>${r.conf?'Yes, confirmed':r.fixed?'No, a fixed tone':r.unclear?'Unclear':'Not tested (speed too steady)'}</td></tr>`).join(''):`<tr><td class="muted">No order stayed above ${thr} mg long enough to test.</td></tr>`;
+ const order=[verdict,...j.map(x=>OI(x.k)[1]),'unmatched'].filter((x,i,a)=>x&&a.indexOf(x)===i);$('guide').innerHTML=guideHTML(order)}
+function guideHTML(list){return list.filter(k=>GUIDE[k]).map((k,i)=>`<details ${i?'':'open'}><summary style="color:${k in SRC?SRC[k].c:'var(--ink)'}">${k in SRC?SRC[k].n:'Not matched to an order'}</summary><ul>${GUIDE[k].map(g=>`<li>${esc(g)}</li>`).join('')}</ul></details>`).join('')}
+function csv(){return `t_s,speed_${S.units},rpm,peak_hz,peak_mg,felt,${KEYS.map(k=>k+'_mg').join(',')},${KEYS.map(k=>k+'_hz').join(',')},live_verdict\n`+log.map(l=>[l.t.toFixed(1),l.v.toFixed(1),Math.round(l.rpm),l.f.toFixed(2),l.a.toFixed(1),l.mark,...KEYS.map(k=>l.o[k]?l.o[k].a.toFixed(1):''),...KEYS.map(k=>l.o[k]?l.o[k].f.toFixed(2):''),l.j].join(',')).join('\n')}
 $('csvBtn').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv()],{type:'text/csv'}));a.download='road-test-'+new Date().toISOString().slice(0,16).replace(':','')+'.csv';a.click()};
 $('copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText(csv());$('copyBtn').textContent='Copied'}catch(e){$('copyBtn').textContent='Copy failed'}setTimeout(()=>$('copyBtn').textContent='Copy CSV',1500)};
 $('clrBtn').onclick=()=>{log=[];renderRes()};
@@ -313,6 +369,7 @@ $('zeroBtn').onclick=()=>{zeroAng=ang();inclUpd()};$('absBtn').onclick=()=>{zero
 function spdChk(){const d=+$('indic').value;if(!d||gpsMps==null){return}const g=fromMps(gpsMps),e=(d-g)/g*100;$('spdErr').textContent=g<5?'Drive faster for a useful reading.':`Speedometer reads ${Math.abs(e).toFixed(1)}% ${e>=0?'high':'low'} (true ${g.toFixed(1)} ${S.units==='mph'?'mph':'km/h'}).`}
 $('indic').addEventListener('input',spdChk);
 
+try{baseline=JSON.parse(localStorage.getItem('ordertrace_base')||'null')}catch(e){}baseUI();
 $('startBtn').onclick=start;$('recBtn').onclick=toggleRec;
 drawOrds();drawAll();renderRes();
 }
