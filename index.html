@@ -124,7 +124,7 @@ details li{margin:4px 0}
       <div><label for="tol">Match tolerance (%)</label><input id="tol" inputmode="decimal"></div>
       <div><label for="minA">Minimum peak (mg)</label><input id="minA" inputmode="decimal"></div>
     </div>
-    <p class="muted">Defaults are set for a 2014 BMW 330d xDrive Touring. Check the final drive: in D at a steady 70 mph the rev counter should read about 1,750 rpm with 2.81; about 1,600 means 2.56. Settings save on this device automatically. OBD needs a browser with Web Bluetooth: on iPhone use the free Bluefy browser (Safari has no Bluetooth access). Don't pair the adapter in iOS Settings; connect from the Live tab.</p>
+    <p class="muted">Defaults are set for a 2014 BMW 330d xDrive Touring. Final drive 2.56, confirmed from a road test (OBD rpm against measured wheel speed in 8th). Settings save on this device automatically. OBD needs a browser with Web Bluetooth: on iPhone use the free Bluefy browser (Safari has no Bluetooth access). Don't pair the adapter in iOS Settings; connect from the Live tab.</p>
   </div>
 </section>
 
@@ -160,7 +160,7 @@ details li{margin:4px 0}
 {
 const $=id=>document.getElementById(id);
 /* Defaults: 2014 BMW 330d xDrive Touring (F31), N57 straight-six, ZF 8HP, 225/40R19 */
-const DEF={tire:'225/40R19',axle:'2.81',drive:'prop',gears:'4.714,3.143,2.106,1.667,1.285,1.000,0.839,0.667',cyl:'6',rpmMode:'obd',gear:'8',rpmMan:'2000',motor:'9.0',spdMode:'gps',units:'mph',spdMan:'70',simSrc:'T1',tol:'6',minA:'6'};
+const DEF={tire:'225/40R19',axle:'2.56',drive:'prop',gears:'4.714,3.143,2.106,1.667,1.285,1.000,0.839,0.667',cyl:'6',rpmMode:'obd',gear:'8',rpmMan:'2000',motor:'9.0',spdMode:'gps',units:'mph',spdMan:'70',simSrc:'T1',tol:'6',minA:'6'};
 let S={...DEF};
 try{Object.assign(S,JSON.parse(localStorage.getItem('ordertrace2')||'{}'))}catch(e){}
 const save=()=>{try{localStorage.setItem('ordertrace2',JSON.stringify(S))}catch(e){}};
@@ -170,8 +170,8 @@ const G=9.80665, N=256, M=1024, KEYS=['T1','T2','T3','D1','D2','E05','E1','E2','
 /* ---------- settings UI ---------- */
 const ids=Object.keys(DEF);
 function fillGears(){const g=S.gears.split(/[,\s]+/).map(Number).filter(x=>x>0);$('gear').innerHTML=g.map((r,i)=>`<option value="${i+1}">${i+1} (${r.toFixed(2)})</option>`).join('');if(+S.gear>g.length)S.gear=String(g.length);$('gear').value=S.gear}
-function tireDims(){const m=S.tire.toUpperCase().replace(/\s/g,'').match(/(\d{3})\/(\d{2})Z?R?F?(\d{2})/);if(!m)return null;const d=+m[3]*25.4+2*+m[1]*+m[2]/100;return{d,c:Math.PI*d*0.97/1000}}
-function syncUI(){fillGears();ids.forEach(k=>{if($(k))$(k).value=S[k]});const t=tireDims();$('tireInfo').textContent=t?`Diameter ${t.d.toFixed(0)} mm · rolling circumference ≈ ${(t.c*1000).toFixed(0)} mm (3% loaded-radius allowance)`:'Use the format 225/45R17';$('engCard').style.display=S.drive==='ev'?'none':'';$('evCard').style.display=S.drive==='ev'?'':'none';$('spdU').textContent=S.units==='mph'?'mph':'km/h'}
+function tireDims(){const m=S.tire.toUpperCase().replace(/\s/g,'').match(/(\d{3})\/(\d{2})Z?R?F?(\d{2})/);if(!m)return null;const d=+m[3]*25.4+2*+m[1]*+m[2]/100;return{d,c:Math.PI*d*0.988/1000}}
+function syncUI(){fillGears();ids.forEach(k=>{if($(k))$(k).value=S[k]});const t=tireDims();$('tireInfo').textContent=t?`Diameter ${t.d.toFixed(0)} mm · rolling circumference ≈ ${(t.c*1000).toFixed(0)} mm (1.2% loaded-radius allowance, calibrated on a real drive)`:'Use the format 225/45R17';$('engCard').style.display=S.drive==='ev'?'none':'';$('evCard').style.display=S.drive==='ev'?'':'none';$('spdU').textContent=S.units==='mph'?'mph':'km/h'}
 ids.forEach(k=>{const el=$(k);if(!el)return;el.addEventListener('change',()=>{S[k]=el.value;save();syncUI()});el.addEventListener('input',()=>{S[k]=el.value;save();if(k==='tire'||k==='gears')syncUI()})});
 syncUI();
 
@@ -180,7 +180,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.query
 
 /* ---------- state ---------- */
 const buf={t:[],x:[],y:[],z:[]};
-let gpsMps=null,running=false,simTimer=null,simT=0,simPh=0,fs=0,lastSpec=null,lastOrders=[],recording=false,log=[],recStart=0,hist=[],vh=[],marking=false,markT0=0,baseCap=null,baseline=null,grav={x:0,y:0,z:-G},zeroAng=null,wake=null;
+let gpsMps=null,running=false,simTimer=null,simT=0,simPh=0,fs=0,lastSpec=null,lastOrders=[],recording=false,log=[],recStart=0,hist=[],vh=[],prevS=0,marking=false,markT0=0,baseCap=null,baseline=null,grav={x:0,y:0,z:-G},zeroAng=null,wake=null;
 const toMps=v=>S.units==='mph'?v*0.44704:v/3.6, fromMps=v=>S.units==='mph'?v/0.44704:v*3.6;
 function speedMps(){if(S.spdMode==='obd')return obdFresh()&&OBD.kmh!=null?OBD.kmh/3.6:0;if(S.spdMode==='gps')return gpsMps??0;const b=toMps(+S.spdMan||0);return S.spdMode==='sim'?b*(1+.12*Math.sin(performance.now()/1000*2*Math.PI/40)):b}
 function rpmNow(v){const t=tireDims();if(!t||S.drive==='ev')return null;if(S.rpmMode==='manual')return +S.rpmMan||0;if(S.rpmMode==='obd')return obdFresh()?OBD.rpm:null;const g=S.gears.split(/[,\s]+/).map(Number).filter(x=>x>0)[+S.gear-1]||1;return v/t.c*60*(+S.axle||1)*g}
@@ -257,7 +257,7 @@ function spectrum(){const L=buf.t.length;if(L<N)return null;const t=buf.t.slice(
   amp=raw.map((a,i)=>{let m=0;for(let j=Math.max(0,i-4);j<=Math.min(b.length-1,i+4);j++)m=Math.max(m,b[j]);return Math.max(0,a-1.3*m)})}
  return{amp,raw,based,df:fs/M,fs}}
 /* strongest response within ±tolerance of an expected order frequency */
-function orderAmp(sp,f){if(f<3||f>=sp.fs/2*.95)return null;const tol=(+S.tol||6)/100,lo=Math.max(1,Math.floor(f*(1-tol)/sp.df)),hi=Math.min(sp.amp.length-1,Math.ceil(f*(1+tol)/sp.df));let m=0,mi=lo;for(let i=lo;i<=hi;i++)if(sp.amp[i]>m){m=sp.amp[i];mi=i}return{a:m,f:mi*sp.df,fe:f}}
+function orderAmp(sp,f){if(f<3||f>=sp.fs/2*.95)return null;const tol=(+S.tol||6)/100,lo=Math.max(1,Math.floor(f*(1-tol)/sp.df)),hi=Math.min(sp.amp.length-1,Math.ceil(f*(1+tol)/sp.df));let m=0,mi=-1;const a=sp.amp;for(let i=Math.max(lo,1);i<=Math.min(hi,a.length-2);i++)if(a[i]>=a[i-1]&&a[i]>=a[i+1]&&a[i]>m){m=a[i];mi=i}return{a:m,f:mi<0?f:mi*sp.df,fe:f}}
 function peaks(sp){const a=sp.amp,lo=Math.ceil(3/sp.df),out=[],sorted=[...a.slice(lo)].sort((x,y)=>x-y),floor=sorted[sorted.length>>1]||0;
  for(let i=lo+1;i<a.length-1;i++)if(a[i]>a[i-1]&&a[i]>=a[i+1]&&a[i]>Math.max(+S.minA||0,floor*4))out.push({f:i*sp.df,a:a[i]});return out.sort((x,y)=>y.a-x.a).slice(0,3)}
 /* Tracking test: an order is only CONFIRMED when it stays strong while its expected
@@ -268,7 +268,8 @@ function judge(rows){const thr=+S.minA||6,res=[];
   const fe=li.map(r=>r.o[k].fe),fm=li.map(r=>r.o[k].f),me=fe.reduce((a,b)=>a+b,0)/fe.length,mm=fm.reduce((a,b)=>a+b,0)/fm.length,
    ve=fe.reduce((a,b)=>a+(b-me)**2,0),cv=fe.reduce((a,b,i)=>a+(b-me)*(fm[i]-mm),0),slope=ve?cv/ve:0,span=(Math.max(...fe)-Math.min(...fe))/me,vs=li.map(r=>r.v),tested=span>=.12;
   res.push({k,mean:li.reduce((a,r)=>a+r.o[k].a,0)/li.length,max:Math.max(...li.map(r=>r.o[k].a)),n:li.length,span,slope,conf:tested&&slope>=.6&&slope<=1.5,fixed:tested&&slope<.3,unclear:tested&&(slope>=.3&&slope<.6||slope>1.5),vmin:Math.min(...vs),vmax:Math.max(...vs)})}
- return res.sort((a,b)=>(b.conf-a.conf)||(a.fixed-b.fixed)||(b.mean-a.mean))}
+ const live=res.filter(x=>!x.fixed).sort((a,b)=>b.mean-a.mean),top=live[0],c=live.find(x=>x.conf);
+ const lead=c&&(!top||c.mean>=.5*top.mean)?c:top;return lead?[lead,...res.filter(x=>x!==lead)]:res}
 const OI=k=>({T1:['Tyre 1st','tyre'],T2:['Tyre 2nd','tyre'],T3:['Tyre 3rd','tyre'],D1:['Propshaft 1st','shaft'],D2:['Propshaft 2nd','shaft'],E05:['Engine ½','engine'],E1:['Engine 1st','engine'],E2:['Engine firing','engine'],M1:['Motor 1st','motor']})[k];
 
 /* ---------- loop ---------- */
@@ -278,8 +279,10 @@ function loop(){if(!running)return;const v=speedMps(),rpm=rpmNow(v),sp=spectrum(
  if(sp){lastSpec=sp;$('fsTag').textContent=`${sp.fs.toFixed(0)} Hz · sees to ${(sp.fs/2).toFixed(0)} Hz`;
   if(baseCap){if(v>1){baseCap=null;$('baseInfo').textContent='Baseline cancelled — the car must be stationary'}else{sp.raw.forEach((a,i)=>baseCap.sum[i]+=a);baseCap.n++;const left=Math.ceil((baseCap.end-performance.now())/1000);
    if(left<=0){baseline={fs:sp.fs,amp:Array.from(baseCap.sum,s=>+(s/baseCap.n).toFixed(2))};baseCap=null;try{localStorage.setItem('ordertrace_base',JSON.stringify(baseline))}catch(e){}}else $('baseInfo').textContent=`Capturing baseline… ${left} s (keep still, engine running)`}baseUI()}
+  const lastS=buf.t[buf.t.length-1],stale=performance.now()-lastS>1000||lastS===prevS;prevS=lastS;
+  if(stale){$('vDot').style.background='var(--dim)';$('vTxt').textContent='Sensor paused. Keep the screen on and this page in front. Nothing is logged while paused.';loopT=setTimeout(loop,500);return}
   const pk=peaks(sp),top=pk[0],t=performance.now()/1000,o={};lastOrders.forEach(x=>{const r=orderAmp(sp,x.f);if(r)o[x.k]=r});
-  hist.push({t,v:fromMps(v),o});while(hist.length&&t-hist[0].t>20)hist.shift();
+  hist.push({t,v:fromMps(v),o});while(hist.length&&t-hist[0].t>45)hist.shift();
   const j=judge(hist),best=j[0];
   $('pkF').textContent=top?top.f.toFixed(1):'—';$('pkA').textContent=top?top.a.toFixed(0):'—';
   if(best&&best.conf){const[n,s]=OI(best.k);$('vDot').style.background=SRC[s].c;$('vTxt').textContent=`${SRC[s].n}: ${n} order confirmed. It follows road/engine speed (${best.vmin.toFixed(0)}–${best.vmax.toFixed(0)} ${uName()}), avg ${best.mean.toFixed(0)} mg`}
@@ -371,6 +374,7 @@ function spdChk(){const d=+$('indic').value;if(!d||gpsMps==null){return}const g=
 $('indic').addEventListener('input',spdChk);
 
 try{baseline=JSON.parse(localStorage.getItem('ordertrace_base')||'null')}catch(e){}baseUI();
+document.addEventListener('visibilitychange',async()=>{if(running&&document.visibilityState==='visible'){try{wake=await navigator.wakeLock?.request('screen')}catch(e){}}});
 $('startBtn').onclick=start;$('recBtn').onclick=toggleRec;
 drawOrds();drawAll();renderRes();
 }
