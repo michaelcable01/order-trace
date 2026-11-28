@@ -255,7 +255,9 @@ $('obdBtn').onclick=obdConnect;
 /* ---------- sensors ---------- */
 function msg(t){$('msg').textContent=t;$('msg').classList.toggle('on',!!t)}
 function onMotion(e){const a=e.acceleration&&e.acceleration.x!=null?e.acceleration:e.accelerationIncludingGravity;if(!a||a.x==null)return;push(performance.now(),a.x,a.y,a.z);const g=e.accelerationIncludingGravity;if(g&&g.x!=null){const k=.1;grav.x+=k*(g.x-grav.x);grav.y+=k*(g.y-grav.y);grav.z+=k*(g.z-grav.z);inclUpd()}}
-function push(t,x,y,z){buf.t.push(t);buf.x.push(x);buf.y.push(y);buf.z.push(z);if(buf.t.length>N*2){const n=buf.t.length-N;for(const k in buf)buf[k].splice(0,n)}}
+/* a gap in the samples (screen locked, page in background) would make the window span the gap and give a
+   nonsense sample rate, so start the window again */
+function push(t,x,y,z){if(buf.t.length&&t-buf.t[buf.t.length-1]>500)for(const k in buf)buf[k].length=0;buf.t.push(t);buf.x.push(x);buf.y.push(y);buf.z.push(z);if(buf.t.length>N*2){const n=buf.t.length-N;for(const k in buf)buf[k].splice(0,n)}}
 async function start(){
  if(running){stop();return}
  msg('');
@@ -266,7 +268,8 @@ async function start(){
   setTimeout(()=>{if(running&&buf.t.length<10)msg('No motion data yet. The page must be served over https:// and the phone must allow motion access.')},2500);
  }
  if(S.spdMode==='gps'){if(!navigator.geolocation)msg('No GPS in this browser; use Manual speed.');else geoId=navigator.geolocation.watchPosition(p=>{gpsMps=p.coords.speed!=null&&p.coords.speed>=0?p.coords.speed:gpsMps;$('gpsS').textContent=gpsMps==null?'—':fromMps(gpsMps).toFixed(1);spdChk()},err=>msg('GPS: '+err.message),{enableHighAccuracy:true,maximumAge:0})}
- try{wake=await navigator.wakeLock?.request('screen')}catch(e){}
+ try{wake=await navigator.wakeLock?.request('screen')}catch(e){wake=null}
+ if(!wake&&S.spdMode!=='sim')msg('This browser can\'t keep the screen on. Set Auto-Lock to Never (Settings › Display & Brightness › Auto-Lock) for the test: when the screen locks, the motion sensor stops and nothing is recorded.');
  running=true;$('startBtn').textContent='Stop';$('recBtn').disabled=false;loop();
 }
 let geoId=null,loopT=null;
@@ -384,6 +387,7 @@ function renderRes(){drawTrend();drawVs();
  else $('markTbl').innerHTML='<tr><td class="muted">No marked periods. Press the big button on the Live tab while you can feel the vibration.</td></tr>';
  const c=j.find(x=>x.conf);if(c){out.push(`${marked.length?'Across the whole drive, ':''}<b style="color:${SRC[OI(c.k)[1]].c}">${OI(c.k)[0]} (${c.k}) was confirmed</b>: it followed speed from ${c.vmin.toFixed(0)}–${c.vmax.toFixed(0)} ${u}, averaging ${c.mean.toFixed(0)} mg.`);verdict=verdict||OI(c.k)[1]}
  else if(!marked.length)out.push(`No order was confirmed following speed above ${thr} mg.`);
+ const gaps=log.slice(1).map((r,i)=>r.t-log[i].t).filter(g=>g>1.5);if(gaps.length)out.push(`<span style="color:#ffc89e">Recording paused ${gaps.length} time${gaps.length>1?'s':''}, ${(g=>g<90?Math.round(g)+' s':Math.round(g/60)+' min')(gaps.reduce((a,b)=>a+b,0))} in total, when the motion sensor stopped (screen locked or page not in front). Nothing was recorded then.</span>`);
  const ft=fixedTones();if(ft)out.push(`A constant ${ft.f.toFixed(1)} Hz tone (~${ft.a.toFixed(0)} mg) was the biggest peak in ${ft.pct}% of moving samples at all speeds. That isn't wheel or driveline vibration. ${baseline?'Re-capture the baseline if it is still showing.':'Capture a parked baseline so it gets removed.'}`);
  $('sumTop').innerHTML=out.map(s=>`<p style="margin:0 0 8px">${s}</p>`).join('');
  $('sumTbl').innerHTML=j.length?`<tr><th>Order</th><th class="num">Strong for</th><th>Speeds</th><th class="num">Peak</th><th>Follows speed?</th></tr>`+j.map(r=>`<tr><td>${r.k}</td><td class="num">${(r.n/2).toFixed(0)} s</td><td>${r.vmin.toFixed(0)}–${r.vmax.toFixed(0)}</td><td class="num">${r.max.toFixed(0)} mg</td><td>${r.conf?'Yes, confirmed':r.fixed?'No, a fixed tone':r.unclear?'Unclear':'Not tested (speed too steady)'}</td></tr>`).join(''):`<tr><td class="muted">No order stayed above ${thr} mg long enough to test.</td></tr>`;
@@ -487,7 +491,7 @@ const sensFresh=()=>running&&buf.t.length>0&&performance.now()-buf.t[buf.t.lengt
 function cReady(){const c=[],fresh=sensFresh();
  c.push(!running?{s:'',t:'Motion sensor: starts with the run'}:fresh?{s:'ok',t:'Motion sensor ✓'}:{s:'bad',t:'Motion sensor: no data. Keep the screen on and this page in front'});
  if(S.spdMode==='obd')c.push(obdFresh()&&OBD.kmh!=null?{s:'ok',t:'Speed: OBD ✓'}:{s:'bad',t:OBD.ok?'Speed: OBD not answering':'Speed: OBD not connected. Tap Connect OBD'});
- else if(S.spdMode==='gps')c.push(gpsMps!=null?{s:'ok',t:'Speed: GPS ✓'}:running?{s:'warn',t:'Speed: no GPS yet (usually appears once moving)'}:{s:'',t:'Speed: GPS starts with the run'});
+ else if(S.spdMode==='gps')c.push(obdFresh()&&OBD.kmh!=null?{s:'warn',t:'Speed: GPS, but OBD is connected. Switch Speed source to OBD (Vehicle tab)'}:gpsMps!=null?{s:'ok',t:'Speed: GPS ✓'}:running?{s:'warn',t:'Speed: no GPS yet (usually appears once moving)'}:{s:'',t:'Speed: GPS starts with the run'});
  else if(S.spdMode==='sim')c.push({s:'warn',t:'Speed: simulator (demo data only)'});
  else c.push({s:'bad',t:'Speed: manual can\'t be used. Pick OBD or GPS on the Vehicle tab'});
  const ex=OBD.ok?OBD.ext:null;c.push(ex&&ex.includes('0149')?{s:'ok',t:'Throttle: pedal ✓'}:ex&&ex.includes('0104')?{s:'ok',t:'Throttle: engine load ✓'}:{s:'warn',t:ex?'Throttle: car gives no pedal data, judged from speed change':'Throttle: no OBD, judged from speed change'});
