@@ -142,7 +142,7 @@ details li{margin:4px 0}
 
 <section class="view" id="v-tools">
   <div class="card"><h2>Corner test: which corner is it?</h2>
-    <p class="muted" style="margin-top:0">Put the phone flat and firm on the floor at one corner (footwells, or boot corners for the rear), screen facing up. Start a run, drive the same route through the speeds where you feel it, then stop once parked. Repeat for each corner with the same mounting. Include some steady acceleration and some lifting off (no brakes) at each speed.</p>
+    <p class="muted" style="margin-top:0">Put the phone flat and firm on the floor at one corner (footwells, or boot corners for the rear), screen facing up. Start a run, drive the same route through the speeds where you feel it, then stop once parked. Repeat for each corner with the same mounting, same road, same direction and same lane. Through each speed where you feel it, include some gentle acceleration and some lifting off (no brakes). Accelerate only about as fast as the car slows on lift-off. Harder acceleration makes the reading lower and isn't used. Use Comfort or Sport mode, not ECO PRO: ECO PRO coasting disconnects the engine on lift-off, which removes the load reversal the test relies on.</p>
     <p class="muted" style="text-align:center;margin:0 0 6px">▲ Front of car</p>
     <div class="cgrid" id="cGrid"></div>
     <div class="row" style="margin-top:10px"><button class="b pri" id="cRunBtn">Start run</button><button class="b" id="cDelBtn">Delete this corner</button></div>
@@ -284,7 +284,7 @@ const OI=k=>({T1:['Tyre 1st','tyre'],T2:['Tyre 2nd','tyre'],T3:['Tyre 3rd','tyre
 
 /* ---------- loop ---------- */
 function loop(){if(!running)return;const v=speedMps(),rpm=rpmNow(v),sp=spectrum(),tn=performance.now()/1000;vh.push({t:tn,v,r:rpm||0});const win=sp?N/sp.fs:4.3;while(vh.length&&tn-vh[0].t>win)vh.shift();
- const va=vh.reduce((a,x)=>a+x.v,0)/vh.length,ra=rpm==null?null:vh.reduce((a,x)=>a+x.r,0)/vh.length;lastOrders=orders(va,ra);
+ const va=vh.reduce((a,x)=>a+x.v,0)/vh.length,rv=vh.filter(x=>x.r>0),ra=rpm==null||!rv.length?null:rv.reduce((a,x)=>a+x.r,0)/rv.length;lastOrders=orders(va,ra);
  $('spd').textContent=fromMps(v).toFixed(0);$('spdSrc').textContent=S.spdMode==='obd'?(obdFresh()?'· OBD':'· OBD waiting'):S.spdMode==='gps'?(gpsMps==null?'· GPS searching':'· GPS'):S.spdMode==='sim'?'· sim':'· manual';$('rpm').textContent=rpm?Math.round(rpm):'—';$('rpmL').textContent='rpm'+(gearEst(v,rpm)?' · gear ≈ '+gearEst(v,rpm):'');
  if(sp){lastSpec=sp;$('fsTag').textContent=`${sp.fs.toFixed(0)} Hz · sees to ${(sp.fs/2).toFixed(0)} Hz`;
   if(baseCap){if(v>1){baseCap=null;$('baseInfo').textContent='Baseline cancelled — the car must be stationary'}else{sp.raw.forEach((a,i)=>baseCap.sum[i]+=a);baseCap.n++;const left=Math.ceil((baseCap.end-performance.now())/1000);
@@ -391,35 +391,51 @@ let corners={},cSel='FL',cRun=null;
 try{corners=JSON.parse(localStorage.getItem('ordertrace_corners')||'{}')||{}}catch(e){corners={}}
 const cSave=()=>{try{localStorage.setItem('ordertrace_corners',JSON.stringify(corners))}catch(e){}};
 const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
-function cornerPush(v,o){const now=performance.now()/1000,old=vh.find(x=>now-x.t<=2.5)||vh[0],acc=old&&now-old.t>.8?(v-old.v)/(now-old.t):0;
- const st=acc>.25?'P':acc<-.25?'C':'S';cRun.rows.push([+fromMps(v).toFixed(1),o.T1?+o.T1.a.toFixed(1):null,o.T2?+o.T2.a.toFixed(1):null,o.D1?+o.D1.a.toFixed(1):null,st]);
- const s=Math.round(now-cRun.t0);$('cInfo').textContent=`Recording ${CN[cRun.pos]}: ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')} · ${cRun.rows.length} samples · ${fromMps(v).toFixed(0)} ${uName()}`}
-function cCompare(){const have=CORN.filter(k=>corners[k]&&corners[k].rows.length>=10);if(!have.length)return null;const bw=5,band={};
- have.forEach(k=>corners[k].rows.forEach(r=>{if(r[1]==null||r[0]<20)return;const b=Math.floor(r[0]/bw)*bw;band[b]=band[b]||{};(band[b][k]=band[b][k]||[]).push(r[1])}));
- const bands=Object.keys(band).map(Number).sort((a,b)=>a-b),tbl=bands.map(b=>({b,vals:Object.fromEntries(have.map(k=>[k,band[b][k]&&band[b][k].length>=4?mean(band[b][k]):null]))}));
+/* Speed changing inside the ~4 s FFT window smears the wheel-order peak and reads LOW
+   (20 mg reads ~18 mg at 0.5 m/s², ~13 mg at 1 m/s², ~9.5 mg at 2 m/s²). So only gentle
+   acceleration / lift-off is used (|a| <= 0.6 m/s²), and harder samples are dropped. */
+const ACC_S=.2,ACC_MAX=.6;
+const CST={S:'steady',P:'gentle acceleration ✓',C:'lifting off ✓',XP:'accelerating too hard, not used',XC:'slowing too fast (brakes?), not used'};
+function cornerPush(v,o){const now=performance.now()/1000,old=vh.find(x=>now-x.t<=2.5)||vh[0],acc=old&&now-old.t>.8?(v-old.v)/(now-old.t):0,a=Math.abs(acc);
+ const st=a<ACC_S?'S':a>ACC_MAX?'X':acc>0?'P':'C';cRun.rows.push([+fromMps(v).toFixed(1),o.T1?+o.T1.a.toFixed(1):null,o.T2?+o.T2.a.toFixed(1):null,o.D1?+o.D1.a.toFixed(1):null,st,+acc.toFixed(2)]);
+ const s=Math.round(now-cRun.t0);$('cInfo').textContent=`Recording ${CN[cRun.pos]}: ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')} · ${cRun.rows.length} samples · ${fromMps(v).toFixed(0)} ${uName()} · ${CST[st==='X'?(acc>0?'XP':'XC'):st]}`}
+/* rows of a saved run in the current units, hard accel/brake samples removed */
+const cF=c=>!c.u||c.u===S.units?1:c.u==='mph'?1.609344:1/1.609344;
+function cRows(k){const c=corners[k],f=cF(c);return c.rows.filter(r=>r[4]!=='X').map(r=>[r[0]*f,...r.slice(1)])}
+function cCompare(){const have=CORN.filter(k=>corners[k]&&corners[k].rows.length>=10);if(!have.length)return null;
+ const bw=S.units==='mph'?5:8,vMin=S.units==='mph'?20:30,bOf=v=>Math.floor(v/bw)*bw,R={};have.forEach(k=>R[k]=cRows(k).filter(r=>r[0]>=vMin));
+ /* compare on T1 unless T2 is clearly the bigger wheel order (out-of-round tyre / rim) */
+ const avg=i=>{const a=have.flatMap(k=>R[k].map(r=>r[i])).filter(x=>x!=null);return a.length?mean(a):0},oi=avg(2)>1.2*avg(1)?2:1,ok=oi===2?'T2':'T1',band={};
+ have.forEach(k=>R[k].forEach(r=>{if(r[oi]==null)return;const b=bOf(r[0]);band[b]=band[b]||{};(band[b][k]=band[b][k]||[]).push(r[oi])}));
+ const bands=Object.keys(band).map(Number).sort((a,b)=>a-b),tbl=bands.map(b=>({b,vals:Object.fromEntries(have.map(k=>[k,band[b][k]&&band[b][k].length>=6?mean(band[b][k]):null]))}));
  const common=tbl.filter(t=>Object.values(t.vals).filter(x=>x!=null).length>=2),score={};
  have.forEach(k=>{const rs=common.filter(t=>t.vals[k]!=null).map(t=>t.vals[k]/mean(Object.values(t.vals).filter(x=>x!=null)));score[k]=rs.length?mean(rs):null});
- const P=[],C=[];bands.forEach(b=>{const p=[],c=[];have.forEach(k=>corners[k].rows.forEach(r=>{if(r[1]==null||Math.floor(r[0]/bw)*bw!==b)return;if(r[4]==='P')p.push(r[1]);if(r[4]==='C')c.push(r[1])}));if(p.length>=3&&c.length>=3){P.push(mean(p));C.push(mean(c))}});
- return{have,tbl,common,score,load:P.length?{ratio:mean(P.map((p,i)=>(p+1)/(C[i]+1))),bands:P.length,p:mean(P),c:mean(C)}:null}}
+ const lr=rows=>{const by={};rows.forEach(r=>{if(r[oi]==null||(r[4]!=='P'&&r[4]!=='C'))return;const b=bOf(r[0]);(by[b]=by[b]||{P:[],C:[]})[r[4]].push(r[oi])});
+  const q=Object.values(by).filter(x=>x.P.length>=3&&x.C.length>=3);return q.length?{ratio:mean(q.map(x=>(mean(x.P)+1)/(mean(x.C)+1))),bands:q.length,p:mean(q.map(x=>mean(x.P))),c:mean(q.map(x=>mean(x.C)))}:null};
+ const all=have.flatMap(k=>R[k]),aP=all.filter(r=>r[4]==='P'&&r[5]!=null).map(r=>r[5]),aC=all.filter(r=>r[4]==='C'&&r[5]!=null).map(r=>-r[5]),loadBy={};have.forEach(k=>loadBy[k]=lr(R[k]));
+ return{have,tbl,common,score,ok,bw,load:lr(all),loadBy,aP:aP.length?mean(aP):null,aC:aC.length?mean(aC):null}}
 function cUI(){
- $('cGrid').innerHTML=CORN.map(k=>{const c=corners[k],v=c&&c.rows.map(r=>r[0]).filter(x=>x>1);return`<button data-c="${k}" class="${k===cSel?'sel':''}" style="border-left:6px solid ${CC[k]}"><b>${k}</b>${c?`${Math.round(c.rows.length/2/60*10)/10} min · ${v.length?Math.min(...v).toFixed(0)+'–'+Math.max(...v).toFixed(0)+' '+uName():'not moving'}`:'Not recorded'}</button>`}).join('');
+ $('cGrid').innerHTML=CORN.map(k=>{const c=corners[k],v=c&&c.rows.map(r=>r[0]*cF(c)).filter(x=>x>1);return`<button data-c="${k}" class="${k===cSel?'sel':''}" style="border-left:6px solid ${CC[k]}"><b>${k}</b>${c?`${Math.round(c.rows.length/2/60*10)/10} min · ${v.length?Math.min(...v).toFixed(0)+'–'+Math.max(...v).toFixed(0)+' '+uName():'not moving'}`:'Not recorded'}</button>`}).join('');
  document.querySelectorAll('#cGrid button').forEach(b=>b.onclick=()=>{if(cRun)return;cSel=b.dataset.c;cUI()});
  $('cRunBtn').textContent=cRun?`Stop and save ${cRun.pos}`:`Start run: ${CN[cSel]}`;$('cRunBtn').classList.toggle('rec',!!cRun);$('cDelBtn').style.display=corners[cSel]&&!cRun?'':'none';
  if(!cRun)$('cInfo').textContent=corners[cSel]?`${CN[cSel]} saved. Starting a new run replaces it.`:'Mount the phone at this corner, then start.';
  const r=cCompare();if(!r){$('cOut').innerHTML='';drawCorner();return}const u=uName(),out=[];
  const ranked=r.have.filter(k=>r.score[k]!=null).sort((a,b)=>r.score[b]-r.score[a]);
- if(ranked.length>=2){const a=ranked[0],b=ranked[1],x=r.score[a]/r.score[b];out.push(x>=1.3?`<b style="color:${CC[a]}">Strongest at ${CN[a]}</b>: wheel-speed (T1) vibration ${x.toFixed(1)}× the next corner (${CN[b]}) at matched speeds.`:`No clear winner yet: ${CN[a]} and ${CN[b]} are within ${Math.round((x-1)*100)}% of each other.`);
+ if(r.ok==='T2')out.push('Compared on tyre 2nd order (T2), which is clearly stronger than T1 in these runs. T2 usually means an out-of-round tyre or rim rather than imbalance.');
+ if(ranked.length>=2){const a=ranked[0],b=ranked[1],x=r.score[a]/r.score[b];out.push(x>=1.3?`<b style="color:${CC[a]}">Strongest at ${CN[a]}</b>: wheel-speed (${r.ok}) vibration ${x.toFixed(1)}× the next corner (${CN[b]}) at matched speeds.`:`No clear winner yet: ${CN[a]} and ${CN[b]} are within ${Math.round((x-1)*100)}% of each other.`);
   const f=['FL','FR'].filter(k=>r.score[k]!=null),re=['RL','RR'].filter(k=>r.score[k]!=null);if(f.length&&re.length){const fr=mean(f.map(k=>r.score[k]))/mean(re.map(k=>r.score[k]));out.push(fr>1.2?'Front stronger than rear.':fr<1/1.2?'Rear stronger than front.':'Front and rear similar.')}}
  else out.push('Record at least two corners over the same speeds to compare.');
- if(r.load){const x=r.load.ratio;out.push(`<b>Load test</b>: T1 averages ${r.load.p.toFixed(0)} mg while accelerating vs ${r.load.c.toFixed(0)} mg while lifting off, at the same speeds (${r.load.bands} speed bands). `+(x>=1.4?'It gets clearly worse under power, which points to the driveline (half-shaft / CV joint) rather than a wheel, hub or disc.':x<=1/1.4?'It is stronger off throttle, which is unusual. Check for play in the joints or bushes.':'Load makes little difference, which points to a rotating imbalance (rim, hub seating, disc) rather than a CV joint.'))}
- else out.push('Load test: needs both accelerating and lifting off (no brakes) through the same speeds.');
+ if(r.load){const x=r.load.ratio,per=r.have.filter(k=>r.loadBy[k]).map(k=>`${k} ${r.loadBy[k].ratio.toFixed(1)}×`).join(', ');
+  out.push(`<b>Load test</b>: ${r.ok} averages ${r.load.p.toFixed(0)} mg while gently accelerating vs ${r.load.c.toFixed(0)} mg while lifting off, at the same speeds (${r.load.bands} speed bands). `+(x>=1.4?'It gets clearly worse under power, which points to the driveline (half-shaft / CV joint) rather than a wheel, hub or disc.':x<=1/1.4?'It is stronger off throttle, which is unusual. Check for play in the joints or bushes.':'Load makes little difference, which points to a rotating imbalance (rim, hub seating, disc) rather than a CV joint.')+(per?` Per corner (accelerating ÷ lifting off): ${per}.`:''));
+  if(r.aP!=null&&r.aC!=null&&r.aP>1.5*r.aC)out.push(`<span class="muted">You accelerated at ${r.aP.toFixed(2)} m/s² on average but the car slowed at only ${r.aC.toFixed(2)} m/s² when you lifted off. Faster speed change makes the reading lower, so the accelerating value is understated. Accelerate more gently next time, about as fast as the car slows when you lift off.</span>`)}
+ else out.push('Load test: needs both gentle acceleration and lifting off (no brakes) through the same speeds. Hard acceleration and braking are not used.');
  const tb=r.tbl.filter(t=>Object.values(t.vals).some(x=>x!=null));
- $('cOut').innerHTML=out.map(s=>`<p style="margin:10px 0 0">${s}</p>`).join('')+(tb.length?`<div class="scroll" style="margin-top:10px"><table><tr><th>${u}</th>${r.have.map(k=>`<th class="num">${k}</th>`).join('')}</tr>${tb.map(t=>{const mx=Math.max(...Object.values(t.vals).filter(x=>x!=null));return`<tr><td>${t.b}–${t.b+5}</td>${r.have.map(k=>`<td class="num"${t.vals[k]!=null&&t.vals[k]===mx&&Object.values(t.vals).filter(x=>x!=null).length>1?` style="color:${CC[k]};font-weight:700"`:''}>${t.vals[k]==null?'':t.vals[k].toFixed(0)}</td>`).join('')}</tr>`}).join('')}</table></div><p class="muted" style="margin:6px 0 0">T1 in mg, averaged per 5 ${u} band. Strongest corner per band in colour.</p>`:'');
+ $('cOut').innerHTML=out.map(s=>`<p style="margin:10px 0 0">${s}</p>`).join('')+(tb.length?`<div class="scroll" style="margin-top:10px"><table><tr><th>${u}</th>${r.have.map(k=>`<th class="num">${k}</th>`).join('')}</tr>${tb.map(t=>{const mx=Math.max(...Object.values(t.vals).filter(x=>x!=null));return`<tr><td>${t.b}–${t.b+r.bw}</td>${r.have.map(k=>`<td class="num"${t.vals[k]!=null&&t.vals[k]===mx&&Object.values(t.vals).filter(x=>x!=null).length>1?` style="color:${CC[k]};font-weight:700"`:''}>${t.vals[k]==null?'':t.vals[k].toFixed(0)}</td>`).join('')}</tr>`}).join('')}</table></div><p class="muted" style="margin:6px 0 0">${r.ok} in mg, averaged per ${r.bw} ${u} band. Strongest corner per band in colour.</p>`:'');
  drawCorner()}
 function drawCorner(){const c=$('cChart');if(!c||!c.offsetParent)return;const[x,W,H]=ctx(c),r=cCompare();x.font='11px -apple-system,sans-serif';x.fillStyle=css('--dim');if(!r){x.fillText('No corner runs yet',10,H/2);return}
- let vm=10,am=20;r.tbl.forEach(t=>{vm=Math.max(vm,t.b+5);Object.values(t.vals).forEach(v=>{if(v!=null)am=Math.max(am,v)})});am*=1.1;axes(x,W,H,vm,am,`${uName()} →`);const X=v=>30+(W-34)*v/vm,Y=a=>8+(H-30)*(1-a/am);
- r.have.forEach(k=>{const pts=r.tbl.filter(t=>t.vals[k]!=null).map(t=>[t.b+2.5,t.vals[k]]);if(!pts.length)return;x.beginPath();pts.forEach((p,i)=>i?x.lineTo(X(p[0]),Y(p[1])):x.moveTo(X(p[0]),Y(p[1])));x.strokeStyle=CC[k];x.lineWidth=2;x.stroke();const l=pts[pts.length-1];x.fillStyle=CC[k];x.fillText(k,Math.min(W-20,X(l[0])+3),Y(l[1])-3)})}
-$('cRunBtn').onclick=async()=>{if(cRun){if(cRun.rows.length>=10){corners[cRun.pos]={rows:cRun.rows,date:Date.now()};cSave()}else $('cInfo').textContent='Run too short to save.';cRun=null;cUI();return}
+ let vm=10,am=20;r.tbl.forEach(t=>{vm=Math.max(vm,t.b+r.bw);Object.values(t.vals).forEach(v=>{if(v!=null)am=Math.max(am,v)})});am*=1.1;axes(x,W,H,vm,am,`${uName()} →`);const X=v=>30+(W-34)*v/vm,Y=a=>8+(H-30)*(1-a/am);
+ r.have.forEach(k=>{const pts=r.tbl.filter(t=>t.vals[k]!=null).map(t=>[t.b+r.bw/2,t.vals[k]]);if(!pts.length)return;x.beginPath();pts.forEach((p,i)=>i?x.lineTo(X(p[0]),Y(p[1])):x.moveTo(X(p[0]),Y(p[1])));x.strokeStyle=CC[k];x.lineWidth=2;x.stroke();const l=pts[pts.length-1];x.fillStyle=CC[k];x.fillText(k,Math.min(W-20,X(l[0])+3),Y(l[1])-3)})}
+$('cRunBtn').onclick=async()=>{if(cRun){if(cRun.rows.length>=10){corners[cRun.pos]={rows:cRun.rows,date:Date.now(),u:S.units};cSave()}else $('cInfo').textContent='Run too short to save.';cRun=null;cUI();return}
  if(!running)await start();if(!running)return;cRun={pos:cSel,rows:[],t0:performance.now()/1000};cUI()};
 $('cDelBtn').onclick=()=>{delete corners[cSel];cSave();cUI()};
 cUI();
