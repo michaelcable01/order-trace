@@ -143,9 +143,11 @@ details li{margin:4px 0}
 <section class="view" id="v-tools">
   <div class="card"><h2>Corner test: which corner is it?</h2>
     <p class="muted" style="margin-top:0">Four runs, each over the same route, direction, lane and speeds. 1: front reference. 2: rear reference. The stronger end is then split: 3 and 4 measure its left and right sides. Tap a step to see where the phone goes, start the run, and stop it once parked. Phone flat, screen up, held firm (non-slip mat or tape).</p>
-    <p class="muted">Through each speed where you feel it, include some steady driving, some gentle acceleration and some lifting off (no brakes). Accelerate only about as fast as the car slows on lift-off: harder acceleration makes the reading lower and isn't used. Use Comfort or Sport mode, not ECO PRO, whose coasting disconnects the engine on lift-off.</p>
+    <p class="muted">Through each speed where you feel it, include some steady driving, some gentle acceleration and some lifting off (no brakes). Accelerate only about as fast as the car slows on lift-off: harder acceleration makes the reading lower and isn't used. Use Comfort or Sport mode, not ECO PRO, whose coasting disconnects the engine on lift-off. With OBD connected, the app reads the accelerator pedal (or engine load), so steady cruising counts as under power and any lift-off counts, even downhill.</p>
+    <p class="muted">Each run is saved on this phone when you stop it, and every 5 s while it records, so a reload loses only the last few seconds. Use Save this run to keep a copy as a file.</p>
     <div id="cGrid"></div>
     <div class="row" style="margin-top:10px"><button class="b pri" id="cRunBtn">Start run</button><button class="b" id="cDelBtn">Delete this run</button></div>
+    <div class="row" style="margin-top:8px"><button class="b" id="cCsvBtn">Save this run (CSV)</button><button class="b" id="cCopyBtn">Copy</button><button class="b" id="cAllBtn">Save all runs</button></div>
     <p class="muted" id="cInfo"></p>
     <div id="cOut"></div>
     <div class="fig" style="height:190px;margin-top:10px"><canvas id="cChart"></canvas></div>
@@ -203,10 +205,17 @@ function orders(v,rpm){const t=tireDims();if(!t)return[];const w=v/t.c,ax=+S.axl
 
 
 /* ---------- OBD (ELM327 over Bluetooth LE: Veepeak OBDCheck BLE/BLE+ and similar) ---------- */
-const OBD={tx:null,buf:'',q:null,rpm:null,kmh:null,t:0,ok:false,dev:null};
+const OBD={tx:null,buf:'',q:null,rpm:null,kmh:null,t:0,ok:false,dev:null,ext:[],load:null,lt:0,ped:null,pt:0,pedMin:Infinity};
 const U=h=>`0000${h}-0000-1000-8000-00805f9b34fb`,SVCS=[U('fff0'),U('ffe0'),U('18f0'),'e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
 const errTxt=e=>e==null?'unknown error':typeof e==='string'?e:(e.message||e.name||JSON.stringify(e)||String(e));
 const obdFresh=()=>OBD.ok&&performance.now()-OBD.t<3000;
+const obdLoad=()=>obdFresh()&&OBD.load!=null&&performance.now()-OBD.lt<3000?OBD.load:null,obdPed=()=>obdFresh()&&OBD.ped!=null&&performance.now()-OBD.pt<3000?OBD.ped:null;
+/* Is the driveline pulling (on) or being driven by the wheels (off)? The pedal is measured from its resting
+   value, because pedal position D often reads ~15% with the foot off. Falls back to calculated engine load. */
+function obdDrive(){const p=obdPed();if(p!=null){const d=p-OBD.pedMin;return d>=4?'on':d<=1.5?'off':null}const l=obdLoad();return l==null?null:l>=20?'on':l<=5?'off':null}
+/* supported-PID bitmaps: a 41 xx response carries 32 bits for PIDs xx+1..xx+32 */
+function pidBits(r,base){let bits=0;r.toUpperCase().split(/[\r\n]+/).forEach(l=>{const m=l.replace(/\s/g,'').match(new RegExp('^41'+base+'([0-9A-F]{8})'));if(m)bits=(bits|parseInt(m[1],16))>>>0});return bits}
+const pidOk=(bits,base,pid)=>!!(bits>>>(31-(pid-base-1))&1);
 const obdStat=t=>$('obdStat').textContent='OBD: '+t;
 function gearEst(v,rpm){const t=tireDims();if(!t||!rpm||v<3||S.drive==='ev')return null;const r=rpm/(v/t.c*60)/(+S.axle||1),g=S.gears.split(/[,\s]+/).map(Number).filter(x=>x>0);let bi=0;g.forEach((x,i)=>{if(Math.abs(x-r)<Math.abs(g[bi]-r))bi=i});return Math.abs(g[bi]-r)/g[bi]<.12?bi+1:null}
 function obdData(e){OBD.buf+=new TextDecoder().decode(e.target.value);if(OBD.buf.includes('>')){const r=OBD.buf.split('>')[0];OBD.buf='';const q=OBD.q;OBD.q=null;if(q)q(r)}}
@@ -228,11 +237,15 @@ async function obdConnect(){
   step='starting notifications';await rx.startNotifications();rx.addEventListener('characteristicvaluechanged',obdData);OBD.tx=tx;OBD.dev=dev;
   step='initialising adapter';obdStat('initialising adapter…');for(const c of['ATZ','ATE0','ATL0','ATS0','ATH0','ATSP0'])await obdCmd(c,c==='ATZ'?2500:1500);
   const t=await obdCmd('0100',6000);if(!/41\s*00/.test(t))throw new Error('adapter found but the car did not answer. Is the ignition on?');
+  step='checking supported data';const b00=pidBits(t,'00'),b40=pidBits(await obdCmd('0140',3000),'40');OBD.ext=[];OBD.pedMin=Infinity;
+  if(pidOk(b40,0x40,0x49))OBD.ext.push('0149');if(pidOk(b00,0,0x04))OBD.ext.push('0104');
   OBD.ok=true;OBD.t=performance.now();$('obdBtn').textContent='Disconnect OBD';obdPoll();
  }catch(e){obdStat(`failed while ${step}: ${errTxt(e)}`);try{OBD.dev&&OBD.dev.gatt.disconnect()}catch(_){}}}
-async function obdPoll(){let i=0;while(OBD.ok){const r=(await obdCmd(i++%2?'010D':'010C')).replace(/\s/g,'').toUpperCase();let m=r.match(/410C([0-9A-F]{2})([0-9A-F]{2})/);
+/* rpm and speed alternate; every 5th request reads pedal / engine load in turn */
+async function obdPoll(){let i=0,e=0;while(OBD.ok){const k=i++%5,c=k===4&&OBD.ext.length?OBD.ext[e++%OBD.ext.length]:k%2?'010D':'010C',r=(await obdCmd(c)).replace(/\s/g,'').toUpperCase();let m=r.match(/410C([0-9A-F]{2})([0-9A-F]{2})/);
+ const n=performance.now(),l=r.match(/4104([0-9A-F]{2})/),pd=r.match(/4149([0-9A-F]{2})/);if(l){OBD.load=parseInt(l[1],16)*100/255;OBD.lt=n}if(pd){OBD.ped=parseInt(pd[1],16)*100/255;OBD.pt=n;OBD.pedMin=Math.min(OBD.pedMin,OBD.ped)}
  if(m){OBD.rpm=(parseInt(m[1],16)*256+parseInt(m[2],16))/4;OBD.t=performance.now()}m=r.match(/410D([0-9A-F]{2})/);if(m){OBD.kmh=parseInt(m[1],16);OBD.t=performance.now()}
- if(OBD.ok)obdStat(`connected · ${OBD.rpm==null?'—':Math.round(OBD.rpm)} rpm · ${OBD.kmh==null?'—':Math.round(S.units==='mph'?OBD.kmh/1.609344:OBD.kmh)} ${S.units==='mph'?'mph':'km/h'}`)}}
+ if(OBD.ok)obdStat(`connected · ${OBD.rpm==null?'—':Math.round(OBD.rpm)} rpm · ${OBD.kmh==null?'—':Math.round(S.units==='mph'?OBD.kmh/1.609344:OBD.kmh)} ${S.units==='mph'?'mph':'km/h'}`+(OBD.ext.includes('0149')?` · pedal ${OBD.ped==null?'—':Math.max(0,OBD.ped-OBD.pedMin).toFixed(0)+'%'}`:'')+(OBD.ext.includes('0104')?` · load ${OBD.load==null?'—':OBD.load.toFixed(0)+'%'}`:'')+(OBD.ext.length?'':' · no pedal/load data from this car'))}}
 $('obdBtn').onclick=obdConnect;
 
 /* ---------- sensors ---------- */
@@ -300,7 +313,7 @@ function loop(){if(!running)return;const v=speedMps(),rpm=rpmNow(v),sp=spectrum(
   else if(top){$('vDot').style.background='var(--dim)';const hi=lastOrders.filter(x=>x.f>=sp.fs/2).map(x=>x.k);$('vTxt').textContent=`Peak at ${top.f.toFixed(1)} Hz isn't following any order`+(sp.based?'':'. Capture a parked baseline to remove constant tones')+(hi.length?`. ${hi.join(', ')} are above the sensor range and can fold back as false peaks.`:'.')}
   else{$('vDot').style.background='var(--ok)';$('vTxt').textContent='No significant vibration'}
   if(cRun)cornerPush(v,o);
-  if(recording){const row={t:(performance.now()-recStart)/1000,v:fromMps(v),rpm:rpm||0,f:top?top.f:0,a:top?top.a:0,mark:marking?1:0,o,j:best?(best.k+(best.conf?'*':best.fixed?'x':'?')):''};log.push(row);
+  if(recording){const ld=obdLoad(),pd=obdPed(),row={t:(performance.now()-recStart)/1000,v:fromMps(v),rpm:rpm||0,ld,pd:pd==null?null:Math.max(0,pd-OBD.pedMin),f:top?top.f:0,a:top?top.a:0,mark:marking?1:0,o,j:best?(best.k+(best.conf?'*':best.fixed?'x':'?')):''};log.push(row);
    $('recInfo').textContent=`${Math.round(row.t)} s · ${log.length} samples`}
   if(marking)$('markBtn').textContent=`Feeling it… ${Math.round((performance.now()-markT0)/1000)} s. Tap when it stops`;
   drawSpec();drawOrds()}
@@ -372,8 +385,12 @@ function renderRes(){drawTrend();drawVs();
  $('sumTbl').innerHTML=j.length?`<tr><th>Order</th><th class="num">Strong for</th><th>Speeds</th><th class="num">Peak</th><th>Follows speed?</th></tr>`+j.map(r=>`<tr><td>${r.k}</td><td class="num">${(r.n/2).toFixed(0)} s</td><td>${r.vmin.toFixed(0)}–${r.vmax.toFixed(0)}</td><td class="num">${r.max.toFixed(0)} mg</td><td>${r.conf?'Yes, confirmed':r.fixed?'No, a fixed tone':r.unclear?'Unclear':'Not tested (speed too steady)'}</td></tr>`).join(''):`<tr><td class="muted">No order stayed above ${thr} mg long enough to test.</td></tr>`;
  const order=[verdict,...j.map(x=>OI(x.k)[1]),'unmatched'].filter((x,i,a)=>x&&a.indexOf(x)===i);$('guide').innerHTML=guideHTML(order)}
 function guideHTML(list){return list.filter(k=>GUIDE[k]).map((k,i)=>`<details ${i?'':'open'}><summary style="color:${k in SRC?SRC[k].c:'var(--ink)'}">${k in SRC?SRC[k].n:'Not matched to an order'}</summary><ul>${GUIDE[k].map(g=>`<li>${esc(g)}</li>`).join('')}</ul></details>`).join('')}
-function csv(){return `t_s,speed_${S.units},rpm,peak_hz,peak_mg,felt,${KEYS.map(k=>k+'_mg').join(',')},${KEYS.map(k=>k+'_hz').join(',')},live_verdict\n`+log.map(l=>[l.t.toFixed(1),l.v.toFixed(1),Math.round(l.rpm),l.f.toFixed(2),l.a.toFixed(1),l.mark,...KEYS.map(k=>l.o[k]?l.o[k].a.toFixed(1):''),...KEYS.map(k=>l.o[k]?l.o[k].f.toFixed(2):''),l.j].join(',')).join('\n')}
-$('csvBtn').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv()],{type:'text/csv'}));a.download='road-test-'+new Date().toISOString().slice(0,16).replace(':','')+'.csv';a.click()};
+function csv(){return `t_s,speed_${S.units},rpm,engine_load_pct,pedal_pct,peak_hz,peak_mg,felt,${KEYS.map(k=>k+'_mg').join(',')},${KEYS.map(k=>k+'_hz').join(',')},live_verdict\n`+log.map(l=>[l.t.toFixed(1),l.v.toFixed(1),Math.round(l.rpm),l.ld==null?'':l.ld.toFixed(0),l.pd==null?'':l.pd.toFixed(0),l.f.toFixed(2),l.a.toFixed(1),l.mark,...KEYS.map(k=>l.o[k]?l.o[k].a.toFixed(1):''),...KEYS.map(k=>l.o[k]?l.o[k].f.toFixed(2):''),l.j].join(',')).join('\n')}
+/* iPhone: share sheet (Save to Files, AirDrop, mail). Elsewhere: a normal download. */
+async function saveFile(name,text){const f=new File([text],name,{type:'text/csv'});if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:name});return}catch(e){if(e&&e.name==='AbortError')return}}
+ const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),10000)}
+const stamp=d=>new Date(d).toISOString().slice(0,16).replace(':','');
+$('csvBtn').onclick=()=>saveFile('road-test-'+stamp(Date.now())+'.csv',csv());
 $('copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText(csv());$('copyBtn').textContent='Copied'}catch(e){$('copyBtn').textContent='Copy failed'}setTimeout(()=>$('copyBtn').textContent='Copy CSV',1500)};
 $('clrBtn').onclick=()=>{log=[];renderRes()};
 
@@ -394,15 +411,24 @@ let corners={},cSel='F',cRun=null,cAxle=null;
 try{corners=JSON.parse(localStorage.getItem('ordertrace_corners')||'{}')||{}}catch(e){corners={}}
 try{cAxle=localStorage.getItem('ordertrace_axle')||null}catch(e){}
 const cSave=()=>{try{localStorage.setItem('ordertrace_corners',JSON.stringify(corners))}catch(e){}};
+let cRecovered='';try{const x=JSON.parse(localStorage.getItem('ordertrace_crun')||'null');localStorage.removeItem('ordertrace_crun');
+ if(x&&x.rows&&x.rows.length>=10&&!(corners[x.pos]&&corners[x.pos].date>=x.date)){corners[x.pos]={rows:x.rows,date:x.date,u:x.u,recovered:true};cSave();cRecovered=`${CN[x.pos]} run was interrupted. The ${Math.round(x.rows.length/2)} s recorded before it stopped has been saved.`}}catch(e){}
 const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
 /* Speed changing inside the ~4 s FFT window smears the wheel-order peak and reads LOW
    (20 mg reads ~18 mg at 0.5 m/s², ~13 mg at 1 m/s², ~9.5 mg at 2 m/s²). So only gentle
    acceleration / lift-off is used (|a| <= 0.6 m/s²), and harder samples are dropped. */
 const ACC_S=.2,ACC_MAX=.6;
-const CST={S:'steady',P:'gentle acceleration ✓',C:'lifting off ✓',XP:'accelerating too hard, not used',XC:'slowing too fast (brakes?), not used'};
-function cornerPush(v,o){const now=performance.now()/1000,old=vh.find(x=>now-x.t<=2.5)||vh[0],acc=old&&now-old.t>.8?(v-old.v)/(now-old.t):0,a=Math.abs(acc);
- const st=a<ACC_S?'S':a>ACC_MAX?'X':acc>0?'P':'C';cRun.rows.push([+fromMps(v).toFixed(1),o.T1?+o.T1.a.toFixed(1):null,o.T2?+o.T2.a.toFixed(1):null,o.D1?+o.D1.a.toFixed(1):null,st,+acc.toFixed(2)]);
- const s=Math.round(now-cRun.t0);$('cInfo').textContent=`Recording ${CN[cRun.pos]}: ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')} · ${cRun.rows.length} samples · ${fromMps(v).toFixed(0)} ${uName()} · ${CST[st==='X'?(acc>0?'XP':'XC'):st]}`}
+const CST={S:'steady',P:'gentle acceleration ✓',C:'lifting off ✓',XP:'accelerating too hard, not used',XC:'slowing too fast (brakes?), not used',oP:'under power (pedal) ✓',oC:'lifted off (pedal) ✓'};
+function cornerPush(v,o){const now=performance.now()/1000,old=vh.find(x=>now-x.t<=2.5)||vh[0],acc=old&&now-old.t>.8?(v-old.v)/(now-old.t):0,a=Math.abs(acc),dr=obdDrive();
+ /* with OBD pedal/load: steady cruising counts as under power and any lift-off as overrun; without it, judge from speed change */
+ const st=a>ACC_MAX?'X':dr?(dr==='on'?'P':'C'):a<ACC_S?'S':acc>0?'P':'C',ld=obdLoad(),pd=obdPed(),rp=obdFresh()?OBD.rpm:null;
+ cRun.rows.push([+fromMps(v).toFixed(1),o.T1?+o.T1.a.toFixed(1):null,o.T2?+o.T2.a.toFixed(1):null,o.D1?+o.D1.a.toFixed(1):null,st,+acc.toFixed(2),+(now-cRun.t0).toFixed(1),rp==null?null:Math.round(rp),ld==null?null:Math.round(ld),pd==null?null:Math.round(Math.max(0,pd-OBD.pedMin)),o.T1?+o.T1.f.toFixed(2):null,dr&&st!=='X'?'obd':'speed']);
+ if(cRun.rows.length%10===0)try{localStorage.setItem('ordertrace_crun',JSON.stringify({pos:cRun.pos,rows:cRun.rows,date:cRun.date,u:S.units}))}catch(e){}
+ const s=Math.round(now-cRun.t0);$('cInfo').textContent=`Recording ${CN[cRun.pos]}: ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')} · ${cRun.rows.length} samples · ${fromMps(v).toFixed(0)} ${uName()} · ${CST[st==='X'?(acc>0?'XP':'XC'):dr?'o'+st:st]}`}
+/* one CSV per run; 'all' puts every saved run in one file with a position column */
+const CSTN={S:'steady',P:'power',C:'liftoff',X:'excluded'};
+function cCsv(keys){return `position,run_date,t_s,speed_${S.units},state,state_from,accel_mps2,rpm,engine_load_pct,pedal_pct,T1_mg,T1_hz,T2_mg,D1_mg\n`+keys.filter(k=>corners[k]).flatMap(k=>{const c=corners[k],f=cF(c),d=new Date(c.date).toISOString();
+ return c.rows.map(r=>[k,d,r[6]??'',(r[0]*f).toFixed(1),CSTN[r[4]]||r[4],r[11]||'speed',r[5]??'',r[7]??'',r[8]??'',r[9]??'',r[1]??'',r[10]??'',r[2]??'',r[3]??''].join(','))}).join('\n')}
 /* rows of a saved run in the current units, hard accel/brake samples removed */
 const cF=c=>!c.u||c.u===S.units?1:c.u==='mph'?1.609344:1/1.609344;
 function cRows(k){const c=corners[k],f=cF(c);return c.rows.filter(r=>r[4]!=='X').map(r=>[r[0]*f,...r.slice(1)])}
@@ -425,7 +451,7 @@ const SN={F:'Front',R:'Rear',FL:'Front left',FR:'Front right',RL:'Rear left',RR:
 const cmpTxt=(x,a,b,p)=>{const rg=`${p.lo}–${p.hi} ${uName()}`;return x>=1.3?`<b style="color:${CC[a]}">${SN[a]} is ${x.toFixed(1)}× stronger than ${SN[b].toLowerCase()}</b> (${rg}).`:x>=1.15?`${SN[a]} is slightly stronger than ${SN[b].toLowerCase()} (${x.toFixed(2)}×, ${rg}). Not conclusive.`:`${SN[a]} and ${SN[b].toLowerCase()} are similar (within ${Math.round((x-1)*100)}%, ${rg}).`};
 function cUI(){
  const r=cCompare(),{ax,auto,p:fr}=cAx(r),L=ax+'L',Rt=ax+'R',steps=[['F',1],['R',2],[L,3],[Rt,4]],u=uName();
- const tile=([k,n])=>{const c=corners[k],v=c&&c.rows.map(x=>x[0]*cF(c)).filter(x=>x>1);return`<button data-c="${k}" class="${k===cSel?'sel':''}" style="border-left:6px solid ${CC[k]}"><b>${n} · ${CN[k]}</b>${c?`✓ ${Math.round(c.rows.length/2/60*10)/10} min · ${v.length?Math.min(...v).toFixed(0)+'–'+Math.max(...v).toFixed(0)+' '+u:'not moving'}`:'Not recorded'}</button>`};
+ const tile=([k,n])=>{const c=corners[k],v=c&&c.rows.map(x=>x[0]*cF(c)).filter(x=>x>1);return`<button data-c="${k}" class="${k===cSel?'sel':''}" style="border-left:6px solid ${CC[k]}"><b>${n} · ${CN[k]}</b>${c?`✓ ${c.recovered?'part run · ':''}${Math.round(c.rows.length/2/60*10)/10} min · ${v.length?Math.min(...v).toFixed(0)+'–'+Math.max(...v).toFixed(0)+' '+u:'not moving'}`:'Not recorded'}</button>`};
  let s1='';if(fr&&fr.n){const [a,b]=fr.x>=1?['F','R']:['R','F'];s1=cmpTxt(Math.max(fr.x,1/fr.x),a,b,fr)}else if(corners.F&&corners.R)s1='The two reference runs share no speed band yet. Drive both through the same speeds.';else s1='Record both reference runs on the same route to compare front and rear.';
  const axTxt=`Step 3–4: left vs right at the <b>${ax==='F'?'front':'rear'}</b>`+(cAxle?' (your choice)':auto?' (stronger axle)':fr&&fr.n?'':'');
  $('cGrid').innerHTML=`<div class="cgrid">${steps.slice(0,2).map(tile).join('')}</div><p style="margin:10px 0">${s1}</p>
@@ -434,15 +460,15 @@ function cUI(){
   <div class="cgrid">${steps.slice(2).map(tile).join('')}</div>`;
  document.querySelectorAll('#cGrid button[data-c]').forEach(b=>b.onclick=()=>{if(cRun)return;cSel=b.dataset.c;cUI()});
  document.querySelectorAll('#cGrid button[data-ax]').forEach(b=>b.onclick=()=>{if(cRun)return;cAxle=b.dataset.ax;try{localStorage.setItem('ordertrace_axle',cAxle)}catch(e){}if(/^[FR][LR]$/.test(cSel))cSel=cAxle+cSel[1];cUI()});
- $('cRunBtn').textContent=cRun?`Stop and save: ${CN[cRun.pos]}`:`Start run: ${CN[cSel]}`;$('cRunBtn').classList.toggle('rec',!!cRun);$('cDelBtn').style.display=corners[cSel]&&!cRun?'':'none';
- if(!cRun)$('cInfo').textContent=(corners[cSel]?`${CN[cSel]} saved. Starting a new run replaces it. `:'')+'Phone: '+MH[cSel];
+ $('cRunBtn').textContent=cRun?`Stop and save: ${CN[cRun.pos]}`:`Start run: ${CN[cSel]}`;$('cRunBtn').classList.toggle('rec',!!cRun);$('cDelBtn').style.display=$('cCsvBtn').style.display=$('cCopyBtn').style.display=corners[cSel]&&!cRun?'':'none';$('cAllBtn').style.display=POS.some(k=>corners[k])&&!cRun?'':'none';
+ if(!cRun)$('cInfo').textContent=(cRecovered?cRecovered+' ':'')+(corners[cSel]?`${CN[cSel]} saved. Starting a new run replaces it. `:'')+'Phone: '+MH[cSel];
  if(!r){$('cOut').innerHTML='';drawCorner();return}const out=[];
  if(r.ok==='T2')out.push('Compared on tyre 2nd order (T2), which is clearly stronger than T1 in these runs. T2 usually means an out-of-round tyre or rim rather than imbalance.');
  const lrp=r.pair(L,Rt);if(lrp&&lrp.n){const [a,b]=lrp.x>=1?[L,Rt]:[Rt,L],x=Math.max(lrp.x,1/lrp.x);out.push(`<b>Left vs right (${ax==='F'?'front':'rear'})</b>: ${cmpTxt(x,a,b,lrp)}`);
   const axSure=fr&&fr.n&&(ax==='F'?fr.x>=1.3:fr.x<=1/1.3);if(x>=1.3)out.push(`<b style="color:${CC[a]}">Most likely corner: ${CN[a]}</b>${axSure?'.':'. The front/rear step was not clear-cut, so treat this as a lead and confirm by swapping that wheel to the other axle.'}`)}
  else if(corners[L]&&corners[Rt])out.push('The left and right runs share no speed band yet.');
  if(r.load){const x=r.load.ratio,per=r.have.filter(k=>r.loadBy[k]).map(k=>`${k} ${r.loadBy[k].ratio.toFixed(1)}×`).join(', ');
-  out.push(`<b>Load test</b>: ${r.ok} averages ${r.load.p.toFixed(0)} mg while gently accelerating vs ${r.load.c.toFixed(0)} mg while lifting off, at the same speeds (${r.load.bands} speed band${r.load.bands>1?'s':''}). `+(x>=1.4?'It gets clearly worse under power, which points to the driveline (half-shaft / CV joint) rather than a wheel, hub or disc.':x<=1/1.4?'It is stronger off throttle, which is unusual. Check for play in the joints or bushes.':'Load makes little difference, which points to a rotating imbalance (rim, hub seating, disc) rather than a CV joint.')+(per?` Per run (accelerating ÷ lifting off): ${per}.`:''));
+  out.push(`<b>Load test</b>: ${r.ok} averages ${r.load.p.toFixed(0)} mg under power vs ${r.load.c.toFixed(0)} mg lifted off, at the same speeds (${r.load.bands} speed band${r.load.bands>1?'s':''}). `+(x>=1.4?'It gets clearly worse under power, which points to the driveline (half-shaft / CV joint) rather than a wheel, hub or disc.':x<=1/1.4?'It is stronger off throttle, which is unusual. Check for play in the joints or bushes.':'Load makes little difference, which points to a rotating imbalance (rim, hub seating, disc) rather than a CV joint.')+(per?` Per run (power ÷ lifted off): ${per}.`:''));
   if(r.aP!=null&&r.aC!=null&&r.aP>1.5*r.aC)out.push(`<span class="muted">You accelerated at ${r.aP.toFixed(2)} m/s² on average but the car slowed at only ${r.aC.toFixed(2)} m/s² when you lifted off. Faster speed change makes the reading lower, so the accelerating value is understated. Accelerate more gently next time, about as fast as the car slows when you lift off.</span>`)}
  else out.push('Load test: needs both gentle acceleration and lifting off (no brakes) through the same speeds. Hard acceleration and braking are not used.');
  const tb=r.tbl.filter(t=>Object.values(t.vals).some(x=>x!=null));
@@ -453,9 +479,12 @@ function drawCorner(){const c=$('cChart');if(!c||!c.offsetParent)return;const[x,
  r.have.forEach(k=>{const pts=r.tbl.filter(t=>t.vals[k]!=null).map(t=>[t.b+r.bw/2,t.vals[k]]);if(!pts.length)return;x.beginPath();pts.forEach((p,i)=>i?x.lineTo(X(p[0]),Y(p[1])):x.moveTo(X(p[0]),Y(p[1])));x.strokeStyle=CC[k];x.lineWidth=2;if(k==='F'||k==='R')x.setLineDash([5,4]);x.stroke();x.setLineDash([]);const l=pts[pts.length-1];x.fillStyle=CC[k];x.fillText(k,Math.min(W-20,X(l[0])+3),Y(l[1])-3)})}
 /* after saving, move on to the next step that has no run yet */
 function cNext(){const {ax}=cAx(cCompare());return['F','R',ax+'L',ax+'R'].find(k=>!corners[k])||cSel}
-$('cRunBtn').onclick=async()=>{if(cRun){if(cRun.rows.length>=10){corners[cRun.pos]={rows:cRun.rows,date:Date.now(),u:S.units};cSave();cRun=null;cSel=cNext();cUI()}else{cRun=null;cUI();$('cInfo').textContent='Run too short to save (needs about 10 s of data after the first 5 s). Start it again.'}return}
- if(!running)await start();if(!running)return;cRun={pos:cSel,rows:[],t0:performance.now()/1000};cUI()};
-$('cDelBtn').onclick=()=>{delete corners[cSel];cSave();cUI()};
+$('cRunBtn').onclick=async()=>{if(cRun){if(cRun.rows.length>=10){corners[cRun.pos]={rows:cRun.rows,date:cRun.date,u:S.units};cSave();try{localStorage.removeItem('ordertrace_crun')}catch(e){}cRun=null;cSel=cNext();cUI()}else{cRun=null;try{localStorage.removeItem('ordertrace_crun')}catch(e){}cUI();$('cInfo').textContent='Run too short to save (needs about 10 s of data after the first 5 s). Start it again.'}return}
+ if(!running)await start();if(!running)return;cRecovered='';cRun={pos:cSel,rows:[],t0:performance.now()/1000,date:Date.now()};cUI()};
+$('cDelBtn').onclick=()=>{if(!confirm(`Delete the ${CN[cSel]} run? Save it as CSV first if you want to keep it.`))return;delete corners[cSel];cSave();cUI()};
+$('cCsvBtn').onclick=()=>saveFile(`corner-${cSel}-${stamp(corners[cSel].date)}.csv`,cCsv([cSel]));
+$('cAllBtn').onclick=()=>saveFile(`corner-all-${stamp(Date.now())}.csv`,cCsv(POS));
+$('cCopyBtn').onclick=async()=>{try{await navigator.clipboard.writeText(cCsv([cSel]));$('cCopyBtn').textContent='Copied'}catch(e){$('cCopyBtn').textContent='Copy failed'}setTimeout(()=>$('cCopyBtn').textContent='Copy',1500)};
 cSel=cNext();cUI();
 
 document.addEventListener('visibilitychange',async()=>{if(running&&document.visibilityState==='visible'){try{wake=await navigator.wakeLock?.request('screen')}catch(e){}}});
