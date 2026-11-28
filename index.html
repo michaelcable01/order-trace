@@ -62,6 +62,7 @@ details li{margin:4px 0}
 .mark.on{background:var(--hit);color:#fff}
 @media(prefers-reduced-motion:no-preference){.mark.on{animation:pulse 1.4s ease-in-out infinite}@keyframes pulse{50%{box-shadow:0 0 0 8px rgba(255,77,77,.25)}}}
 .cgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.cgrid button{min-height:76px;border-radius:12px;background:#0f1318;border:2px solid #33404f;color:var(--dim);font-family:inherit;font-size:14px;text-align:left;padding:10px}.cgrid button b{display:block;font-size:20px;color:var(--ink)}.cgrid button.sel{border-color:var(--ink);background:#1b222c}
+.chk{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.chk span{font-size:13px;padding:4px 9px;border-radius:999px;background:#0f1318;border:1px solid #33404f}.chk .ok{color:var(--ok);border-color:#1f5a40}.chk .warn{color:#ffc89e;border-color:#6a4a2a}.chk .bad{color:#fff;background:#5a1d1d;border-color:var(--hit)}
 .gauge{font:700 56px/1 ui-rounded,-apple-system,sans-serif;text-align:center;font-variant-numeric:tabular-nums;margin:8px 0}
 @media(prefers-reduced-motion:no-preference){.verdict{transition:background .3s}}
 @media(max-width:420px){.ord{grid-template-columns:6.5em 4em minmax(0,1fr) 3.4em;font-size:13px}}
@@ -89,6 +90,20 @@ details li{margin:4px 0}
       <div><b id="pkA">—</b><span>peak mg</span></div>
     </div>
     <div class="verdict" id="verdict"><span class="dot" id="vDot"></span><span id="vTxt">Waiting for data</span></div>
+  </div>
+  <div class="card" id="cCard"><h2>Corner test: which corner is it?</h2>
+    <div id="cGrid"></div>
+    <div class="chk" id="cChk"></div>
+    <div class="row" style="margin-top:10px"><button class="b pri" id="cRunBtn">Start run</button><button class="b" id="cDelBtn">Delete this run</button></div>
+    <p class="muted" id="cInfo"></p>
+    <div id="cOut"></div>
+    <div class="fig" style="height:190px;margin-top:10px"><canvas id="cChart"></canvas></div>
+    <div class="row" style="margin-top:8px"><button class="b" id="cCsvBtn">Save this run (CSV)</button><button class="b" id="cCopyBtn">Copy</button><button class="b" id="cAllBtn">Save all runs</button></div>
+    <details style="margin-top:10px"><summary>How to run it</summary>
+    <p class="muted">Four runs, each over the same route, direction, lane and speeds. 1: front reference. 2: rear reference. The stronger end is then split: 3 and 4 measure its left and right sides. Tap a step to see where the phone goes, start the run, and stop it once parked. Phone flat, screen up, held firm (non-slip mat or tape).</p>
+    <p class="muted">Through each speed where you feel it, include some steady driving, some gentle acceleration and some lifting off (no brakes). Accelerate only about as fast as the car slows on lift-off: harder acceleration makes the reading lower and isn't used. Use Comfort or Sport mode, not ECO PRO, whose coasting disconnects the engine on lift-off. With OBD connected, the app reads the accelerator pedal (or engine load), so steady cruising counts as under power and any lift-off counts, even downhill.</p>
+    <p class="muted">Each run is saved on this phone when you stop it, and every 5 s while it records, so a reload loses only the last few seconds. Use Save this run to keep a copy as a file.</p>
+    </details>
   </div>
   <div class="card"><h2>Spectrum with expected orders</h2><div class="fig"><canvas id="spec"></canvas></div>
     <p class="muted" style="margin:8px 0 0">Vertical lines mark where each order should be at the current speed. A source is only named when its peak follows the line as speed changes. — means the order is above what the sensor can see.</p></div>
@@ -141,17 +156,6 @@ details li{margin:4px 0}
 </section>
 
 <section class="view" id="v-tools">
-  <div class="card"><h2>Corner test: which corner is it?</h2>
-    <p class="muted" style="margin-top:0">Four runs, each over the same route, direction, lane and speeds. 1: front reference. 2: rear reference. The stronger end is then split: 3 and 4 measure its left and right sides. Tap a step to see where the phone goes, start the run, and stop it once parked. Phone flat, screen up, held firm (non-slip mat or tape).</p>
-    <p class="muted">Through each speed where you feel it, include some steady driving, some gentle acceleration and some lifting off (no brakes). Accelerate only about as fast as the car slows on lift-off: harder acceleration makes the reading lower and isn't used. Use Comfort or Sport mode, not ECO PRO, whose coasting disconnects the engine on lift-off. With OBD connected, the app reads the accelerator pedal (or engine load), so steady cruising counts as under power and any lift-off counts, even downhill.</p>
-    <p class="muted">Each run is saved on this phone when you stop it, and every 5 s while it records, so a reload loses only the last few seconds. Use Save this run to keep a copy as a file.</p>
-    <div id="cGrid"></div>
-    <div class="row" style="margin-top:10px"><button class="b pri" id="cRunBtn">Start run</button><button class="b" id="cDelBtn">Delete this run</button></div>
-    <div class="row" style="margin-top:8px"><button class="b" id="cCsvBtn">Save this run (CSV)</button><button class="b" id="cCopyBtn">Copy</button><button class="b" id="cAllBtn">Save all runs</button></div>
-    <p class="muted" id="cInfo"></p>
-    <div id="cOut"></div>
-    <div class="fig" style="height:190px;margin-top:10px"><canvas id="cChart"></canvas></div>
-  </div>
   <div class="card"><h2>Inclinometer (propshaft / U-joint angles)</h2>
     <div class="gauge" id="incl">—°</div>
     <p class="muted" style="text-align:center;margin:0">Lay the phone's long edge along the shaft or flange. Zero on one, read the next to get the working angle.</p>
@@ -188,7 +192,7 @@ ids.forEach(k=>{const el=$(k);if(!el)return;el.addEventListener('change',()=>{S[
 syncUI();
 
 /* ---------- tabs ---------- */
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+b.dataset.v));if(b.dataset.v==='res')renderRes();if(b.dataset.v==='tools')cUI();drawAll()});
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+b.dataset.v));if(b.dataset.v==='res')renderRes();if(b.dataset.v==='live')cUI();drawAll()});
 
 /* ---------- state ---------- */
 const buf={t:[],x:[],y:[],z:[]};
@@ -216,7 +220,7 @@ function obdDrive(){const p=obdPed();if(p!=null){const d=p-OBD.pedMin;return d>=
 /* supported-PID bitmaps: a 41 xx response carries 32 bits for PIDs xx+1..xx+32 */
 function pidBits(r,base){let bits=0;r.toUpperCase().split(/[\r\n]+/).forEach(l=>{const m=l.replace(/\s/g,'').match(new RegExp('^41'+base+'([0-9A-F]{8})'));if(m)bits=(bits|parseInt(m[1],16))>>>0});return bits}
 const pidOk=(bits,base,pid)=>!!(bits>>>(31-(pid-base-1))&1);
-const obdStat=t=>$('obdStat').textContent='OBD: '+t;
+const obdStat=t=>{$('obdStat').textContent='OBD: '+t;if(typeof cChkUI==='function')cChkUI()};
 function gearEst(v,rpm){const t=tireDims();if(!t||!rpm||v<3||S.drive==='ev')return null;const r=rpm/(v/t.c*60)/(+S.axle||1),g=S.gears.split(/[,\s]+/).map(Number).filter(x=>x>0);let bi=0;g.forEach((x,i)=>{if(Math.abs(x-r)<Math.abs(g[bi]-r))bi=i});return Math.abs(g[bi]-r)/g[bi]<.12?bi+1:null}
 function obdData(e){OBD.buf+=new TextDecoder().decode(e.target.value);if(OBD.buf.includes('>')){const r=OBD.buf.split('>')[0];OBD.buf='';const q=OBD.q;OBD.q=null;if(q)q(r)}}
 function obdCmd(c,to=1000){return new Promise(res=>{OBD.buf='';const t=setTimeout(()=>{OBD.q=null;res('')},to);OBD.q=r=>{clearTimeout(t);res(r)};const d=new TextEncoder().encode(c+'\r'),x=OBD.tx;
@@ -266,7 +270,7 @@ async function start(){
  running=true;$('startBtn').textContent='Stop';$('recBtn').disabled=false;loop();
 }
 let geoId=null,loopT=null;
-function stop(){running=false;window.removeEventListener('devicemotion',onMotion);if(geoId!=null)navigator.geolocation.clearWatch(geoId);geoId=null;clearInterval(simTimer);clearTimeout(loopT);try{wake&&wake.release()}catch(e){}if(recording)toggleRec();$('startBtn').textContent='Start sensors';$('recBtn').disabled=true}
+function stop(){if(cRun)cStop();running=false;window.removeEventListener('devicemotion',onMotion);if(geoId!=null)navigator.geolocation.clearWatch(geoId);geoId=null;clearInterval(simTimer);clearTimeout(loopT);try{wake&&wake.release()}catch(e){}if(recording)toggleRec();$('startBtn').textContent='Start sensors';$('recBtn').disabled=true;cChkUI()}
 function startSim(){const sfs=60;let t0=performance.now();simT=0;simTimer=setInterval(()=>{const now=performance.now();while(t0<now){simT+=1/sfs;t0+=1000/sfs;const v=speedMps(),o=orders(v,rpmNow(v)),f=(o.find(x=>x.k===S.simSrc.slice(0,2))||{}).f||0,a=S.simSrc==='none'?0:0.22*Math.min(1,v/25);simPh+=2*Math.PI*f/sfs;const s=a*Math.sin(simPh)+(S.simSrc.endsWith('tone')?0.45*Math.sin(2*Math.PI*23.9*simT):0)+(Math.random()-.5)*0.12+0.05*Math.sin(2*Math.PI*1.3*simT);push(t0,s*.3,s*.2+(Math.random()-.5)*.05,s)}grav={x:0,y:-2,z:-9.6};inclUpd()},50)}
 
 /* ---------- FFT ---------- */
@@ -312,7 +316,7 @@ function loop(){if(!running)return;const v=speedMps(),rpm=rpmNow(v),sp=spectrum(
   else if(best&&!best.fixed){const[n,s]=OI(best.k);$('vDot').style.background=SRC[s].c;$('vTxt').textContent=`Possible ${n} (${best.mean.toFixed(0)} mg). Speed up or slow down by 5–10 ${uName()} to confirm it follows`}
   else if(top){$('vDot').style.background='var(--dim)';const hi=lastOrders.filter(x=>x.f>=sp.fs/2).map(x=>x.k);$('vTxt').textContent=`Peak at ${top.f.toFixed(1)} Hz isn't following any order`+(sp.based?'':'. Capture a parked baseline to remove constant tones')+(hi.length?`. ${hi.join(', ')} are above the sensor range and can fold back as false peaks.`:'.')}
   else{$('vDot').style.background='var(--ok)';$('vTxt').textContent='No significant vibration'}
-  if(cRun)cornerPush(v,o);
+  if(cRun)cornerPush(v,o);if(!cRun||performance.now()%2000<600)cChkUI();
   if(recording){const ld=obdLoad(),pd=obdPed(),row={t:(performance.now()-recStart)/1000,v:fromMps(v),rpm:rpm||0,ld,pd:pd==null?null:Math.max(0,pd-OBD.pedMin),f:top?top.f:0,a:top?top.a:0,mark:marking?1:0,o,j:best?(best.k+(best.conf?'*':best.fixed?'x':'?')):''};log.push(row);
    $('recInfo').textContent=`${Math.round(row.t)} s · ${log.length} samples`}
   if(marking)$('markBtn').textContent=`Feeling it… ${Math.round((performance.now()-markT0)/1000)} s. Tap when it stops`;
@@ -419,7 +423,8 @@ const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
    acceleration / lift-off is used (|a| <= 0.6 m/s²), and harder samples are dropped. */
 const ACC_S=.2,ACC_MAX=.6;
 const CST={S:'steady',P:'gentle acceleration ✓',C:'lifting off ✓',XP:'accelerating too hard, not used',XC:'slowing too fast (brakes?), not used',oP:'under power (pedal) ✓',oC:'lifted off (pedal) ✓'};
-function cornerPush(v,o){const now=performance.now()/1000,old=vh.find(x=>now-x.t<=2.5)||vh[0],acc=old&&now-old.t>.8?(v-old.v)/(now-old.t):0,a=Math.abs(acc),dr=obdDrive();
+function cornerPush(v,o){if((S.spdMode==='obd'&&!obdFresh())||(S.spdMode==='gps'&&gpsMps==null)){$('cInfo').textContent=`Recording ${CN[cRun.pos]}: paused, ${S.spdMode==='obd'?'OBD speed lost. Reconnect OBD':'waiting for GPS speed'}. These seconds are not used.`;return}
+ const now=performance.now()/1000,old=vh.find(x=>now-x.t<=2.5)||vh[0],acc=old&&now-old.t>.8?(v-old.v)/(now-old.t):0,a=Math.abs(acc),dr=obdDrive();
  /* with OBD pedal/load: steady cruising counts as under power and any lift-off as overrun; without it, judge from speed change */
  const st=a>ACC_MAX?'X':dr?(dr==='on'?'P':'C'):a<ACC_S?'S':acc>0?'P':'C',ld=obdLoad(),pd=obdPed(),rp=obdFresh()?OBD.rpm:null;
  cRun.rows.push([+fromMps(v).toFixed(1),o.T1?+o.T1.a.toFixed(1):null,o.T2?+o.T2.a.toFixed(1):null,o.D1?+o.D1.a.toFixed(1):null,st,+acc.toFixed(2),+(now-cRun.t0).toFixed(1),rp==null?null:Math.round(rp),ld==null?null:Math.round(ld),pd==null?null:Math.round(Math.max(0,pd-OBD.pedMin)),o.T1?+o.T1.f.toFixed(2):null,dr&&st!=='X'?'obd':'speed']);
@@ -461,7 +466,7 @@ function cUI(){
  document.querySelectorAll('#cGrid button[data-c]').forEach(b=>b.onclick=()=>{if(cRun)return;cSel=b.dataset.c;cUI()});
  document.querySelectorAll('#cGrid button[data-ax]').forEach(b=>b.onclick=()=>{if(cRun)return;cAxle=b.dataset.ax;try{localStorage.setItem('ordertrace_axle',cAxle)}catch(e){}if(/^[FR][LR]$/.test(cSel))cSel=cAxle+cSel[1];cUI()});
  $('cRunBtn').textContent=cRun?`Stop and save: ${CN[cRun.pos]}`:`Start run: ${CN[cSel]}`;$('cRunBtn').classList.toggle('rec',!!cRun);$('cDelBtn').style.display=$('cCsvBtn').style.display=$('cCopyBtn').style.display=corners[cSel]&&!cRun?'':'none';$('cAllBtn').style.display=POS.some(k=>corners[k])&&!cRun?'':'none';
- if(!cRun)$('cInfo').textContent=(cRecovered?cRecovered+' ':'')+(corners[cSel]?`${CN[cSel]} saved. Starting a new run replaces it. `:'')+'Phone: '+MH[cSel];
+ cChkUI();if(!cRun)$('cInfo').textContent=(cRecovered?cRecovered+' ':'')+(corners[cSel]?`${CN[cSel]} saved. Starting a new run replaces it. `:'')+'Phone: '+MH[cSel];
  if(!r){$('cOut').innerHTML='';drawCorner();return}const out=[];
  if(r.ok==='T2')out.push('Compared on tyre 2nd order (T2), which is clearly stronger than T1 in these runs. T2 usually means an out-of-round tyre or rim rather than imbalance.');
  const lrp=r.pair(L,Rt);if(lrp&&lrp.n){const [a,b]=lrp.x>=1?[L,Rt]:[Rt,L],x=Math.max(lrp.x,1/lrp.x);out.push(`<b>Left vs right (${ax==='F'?'front':'rear'})</b>: ${cmpTxt(x,a,b,lrp)}`);
@@ -477,10 +482,29 @@ function cUI(){
 function drawCorner(){const c=$('cChart');if(!c||!c.offsetParent)return;const[x,W,H]=ctx(c),r=cCompare();x.font='11px -apple-system,sans-serif';x.fillStyle=css('--dim');if(!r){x.fillText('No corner runs yet',10,H/2);return}
  let vm=10,am=20;r.tbl.forEach(t=>{vm=Math.max(vm,t.b+r.bw);Object.values(t.vals).forEach(v=>{if(v!=null)am=Math.max(am,v)})});am*=1.1;axes(x,W,H,vm,am,`${uName()} →`);const X=v=>30+(W-34)*v/vm,Y=a=>8+(H-30)*(1-a/am);
  r.have.forEach(k=>{const pts=r.tbl.filter(t=>t.vals[k]!=null).map(t=>[t.b+r.bw/2,t.vals[k]]);if(!pts.length)return;x.beginPath();pts.forEach((p,i)=>i?x.lineTo(X(p[0]),Y(p[1])):x.moveTo(X(p[0]),Y(p[1])));x.strokeStyle=CC[k];x.lineWidth=2;if(k==='F'||k==='R')x.setLineDash([5,4]);x.stroke();x.setLineDash([]);const l=pts[pts.length-1];x.fillStyle=CC[k];x.fillText(k,Math.min(W-20,X(l[0])+3),Y(l[1])-3)})}
+/* Pre-flight checks, shown live under the step tiles. 'bad' blocks a run from starting; 'warn' is shown but allowed. */
+const sensFresh=()=>running&&buf.t.length>0&&performance.now()-buf.t[buf.t.length-1]<1000;
+function cReady(){const c=[],fresh=sensFresh();
+ c.push(!running?{s:'',t:'Motion sensor: starts with the run'}:fresh?{s:'ok',t:'Motion sensor ✓'}:{s:'bad',t:'Motion sensor: no data. Keep the screen on and this page in front'});
+ if(S.spdMode==='obd')c.push(obdFresh()&&OBD.kmh!=null?{s:'ok',t:'Speed: OBD ✓'}:{s:'bad',t:OBD.ok?'Speed: OBD not answering':'Speed: OBD not connected. Tap Connect OBD'});
+ else if(S.spdMode==='gps')c.push(gpsMps!=null?{s:'ok',t:'Speed: GPS ✓'}:running?{s:'warn',t:'Speed: no GPS yet (usually appears once moving)'}:{s:'',t:'Speed: GPS starts with the run'});
+ else if(S.spdMode==='sim')c.push({s:'warn',t:'Speed: simulator (demo data only)'});
+ else c.push({s:'bad',t:'Speed: manual can\'t be used. Pick OBD or GPS on the Vehicle tab'});
+ const ex=OBD.ok?OBD.ext:null;c.push(ex&&ex.includes('0149')?{s:'ok',t:'Throttle: pedal ✓'}:ex&&ex.includes('0104')?{s:'ok',t:'Throttle: engine load ✓'}:{s:'warn',t:ex?'Throttle: car gives no pedal data, judged from speed change':'Throttle: no OBD, judged from speed change'});
+ if(fresh&&S.spdMode!=='sim'){const gm=Math.hypot(grav.x,grav.y,grav.z),tl=gm>5?Math.acos(Math.min(1,Math.abs(grav.z)/gm))*180/Math.PI:null;if(tl!=null)c.push(tl<12?{s:'ok',t:'Phone flat ✓'}:{s:'warn',t:`Phone tilted ${tl.toFixed(0)}°. Lay it flat`})}
+ return c}
+function cChkUI(){const el=$('cChk');if(!el)return;el.innerHTML=cReady().map(x=>`<span class="${x.s}">${esc(x.t)}</span>`).join('')}
+/* stop the run in progress and keep it if it is long enough */
+function cStop(){const k=()=>{try{localStorage.removeItem('ordertrace_crun')}catch(e){}};if(cRun.rows.length>=10){corners[cRun.pos]={rows:cRun.rows,date:cRun.date,u:S.units};cSave();k();cRun=null;cSel=cNext();cUI()}else{cRun=null;k();cUI();$('cInfo').textContent='Run too short to save (needs about 10 s of data after the first 5 s). Start it again.'}}
 /* after saving, move on to the next step that has no run yet */
 function cNext(){const {ax}=cAx(cCompare());return['F','R',ax+'L',ax+'R'].find(k=>!corners[k])||cSel}
-$('cRunBtn').onclick=async()=>{if(cRun){if(cRun.rows.length>=10){corners[cRun.pos]={rows:cRun.rows,date:cRun.date,u:S.units};cSave();try{localStorage.removeItem('ordertrace_crun')}catch(e){}cRun=null;cSel=cNext();cUI()}else{cRun=null;try{localStorage.removeItem('ordertrace_crun')}catch(e){}cUI();$('cInfo').textContent='Run too short to save (needs about 10 s of data after the first 5 s). Start it again.'}return}
- if(!running)await start();if(!running)return;cRecovered='';cRun={pos:cSel,rows:[],t0:performance.now()/1000,date:Date.now()};cUI()};
+$('cRunBtn').onclick=async()=>{if(cRun){cStop();return}
+ const bad=()=>cReady().filter(x=>x.s==='bad');
+ if(S.spdMode==='manual'||(S.spdMode==='obd'&&!obdFresh())){cChkUI();$('cInfo').textContent='Not started: '+bad().map(x=>x.t).join('. ')+'.';return}
+ if(!running)await start();if(!running){$('cInfo').textContent='Not started: the sensors could not be started (see the message at the top).';return}
+ $('cInfo').textContent='Checking sensors…';const t0=performance.now();while(!sensFresh()&&performance.now()-t0<3000)await new Promise(r=>setTimeout(r,200));
+ cChkUI();const b=bad();if(b.length){$('cInfo').textContent='Not started: '+b.map(x=>x.t).join('. ')+'.';return}
+ cRecovered='';cRun={pos:cSel,rows:[],t0:performance.now()/1000,date:Date.now()};cUI();$('cInfo').textContent=`Recording ${CN[cSel]}: first samples in about 5 s while the analyser fills.`};
 $('cDelBtn').onclick=()=>{if(!confirm(`Delete the ${CN[cSel]} run? Save it as CSV first if you want to keep it.`))return;delete corners[cSel];cSave();cUI()};
 $('cCsvBtn').onclick=()=>saveFile(`corner-${cSel}-${stamp(corners[cSel].date)}.csv`,cCsv([cSel]));
 $('cAllBtn').onclick=()=>saveFile(`corner-all-${stamp(Date.now())}.csv`,cCsv(POS));
