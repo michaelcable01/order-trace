@@ -77,9 +77,11 @@ details li{margin:4px 0}
     <button class="b pri" id="startBtn">Start sensors</button>
     <button class="b" id="recBtn" disabled>Record</button>
     <button class="b" id="obdBtn">Connect OBD</button>
+    <button class="b" id="micBtn">Microphone</button>
     <span class="muted" id="recInfo"></span>
   </div>
-  <p class="muted" id="obdStat" style="margin:-4px 0 12px">OBD: not connected</p>
+  <p class="muted" id="obdStat" style="margin:-4px 0 4px">OBD: not connected</p>
+  <p class="muted" id="micStat" style="margin:0 0 12px">Microphone: off</p>
   <button class="mark" id="markBtn">I can feel it now</button>
   <div class="row" style="margin:0 0 12px"><button class="b" id="baseBtn">Capture baseline (parked)</button><button class="b" id="baseClr" style="display:none">Clear</button><span class="muted" id="baseInfo"></span></div>
   <div class="card">
@@ -103,6 +105,17 @@ details li{margin:4px 0}
     <p class="muted">Four runs, each over the same route, direction, lane and speeds. 1: front reference. 2: rear reference. The stronger end is then split: 3 and 4 measure its left and right sides. Tap a step to see where the phone goes, start the run, and stop it once parked. Phone flat, screen up, held firm (non-slip mat or tape).</p>
     <p class="muted">Through each speed where you feel it, include some steady driving, some gentle acceleration and some lifting off (no brakes). Accelerate only about as fast as the car slows on lift-off: harder acceleration makes the reading lower and isn't used. Use Comfort or Sport mode, not ECO PRO, whose coasting disconnects the engine on lift-off. With OBD connected, the app reads the accelerator pedal (or engine load), so steady cruising counts as under power and any lift-off counts, even downhill.</p>
     <p class="muted">Each run is saved on this phone when you stop it, and every 5 s while it records, so a reload loses only the last few seconds. Use Save this run to keep a copy as a file.</p>
+    </details>
+  </div>
+  <div class="card" id="tCard"><h2>Cornering test: left vs right bends</h2>
+    <p style="margin:0 0 8px">Now: <b id="turnNow">sensors off</b></p>
+    <div class="row"><button class="b pri" id="tRunBtn">Start cornering test</button></div>
+    <p class="muted" id="tInfo"></p>
+    <div id="tOut"></div>
+    <details style="margin-top:10px"><summary>How to run it</summary>
+    <p class="muted">Phone flat in the front passenger footwell. Tap Microphone first to measure the rumble too. Then drive a route with left and right bends at your problem speed: long sweeping bends and motorway junction curves work well. Through bends both ways, keep the throttle on in some and lift off (no brakes) in others, and drive some straight sections at the same speeds for comparison.</p>
+    <p class="muted">On your first left bend, check that this card says ↰ left. If it says right, set Turn direction to Flipped on the Vehicle tab.</p>
+    <p class="muted">This uses the same recording as the Record button, so the felt-it button still works during it. Save it as CSV (and the audio) on the Results tab afterwards.</p>
     </details>
   </div>
   <div class="card"><h2>Spectrum with expected orders</h2><div class="fig"><canvas id="spec"></canvas></div>
@@ -136,9 +149,10 @@ details li{margin:4px 0}
       <div><label for="spdMode">Speed source</label><select id="spdMode"><option value="obd">OBD adapter (wheel speed)</option><option value="gps">GPS</option><option value="manual">Manual / steady cruise</option><option value="sim">Simulator (demo)</option></select></div>
       <div><label for="units">Units</label><select id="units"><option value="mph">mph</option><option value="kmh">km/h</option></select></div>
       <div><label for="spdMan">Manual / sim speed</label><input id="spdMan" inputmode="decimal"></div>
-      <div><label for="simSrc">Simulator fault</label><select id="simSrc"><option value="T1">Tyre imbalance (T1)</option><option value="T2">Tyre out-of-round (T2)</option><option value="D1">Propshaft imbalance (D1)</option><option value="D2">U-joint angle (D2)</option><option value="E2">Engine firing (E2)</option><option value="T1+tone">Tyre imbalance + constant 24 Hz tone</option><option value="none">None (noise only)</option></select></div>
+      <div><label for="simSrc">Simulator fault</label><select id="simSrc"><option value="T1">Tyre imbalance (T1)</option><option value="T1L">Tyre/bearing, worse in left bends (T1)</option><option value="T2">Tyre out-of-round (T2)</option><option value="D1">Propshaft imbalance (D1)</option><option value="D2">U-joint angle (D2)</option><option value="E2">Engine firing (E2)</option><option value="T1+tone">Tyre imbalance + constant 24 Hz tone</option><option value="none">None (noise only)</option></select></div>
       <div><label for="tol">Match tolerance (%)</label><input id="tol" inputmode="decimal"></div>
       <div><label for="minA">Minimum peak (mg)</label><input id="minA" inputmode="decimal"></div>
+      <div><label for="yawFlip">Turn direction</label><select id="yawFlip"><option value="0">Normal</option><option value="1">Flipped (left showed as right)</option></select></div>
     </div>
     <p class="muted">Defaults are set for a 2014 BMW 330d xDrive Touring. Final drive 2.56, confirmed from a road test (OBD rpm against measured wheel speed in 8th). Settings save on this device automatically. OBD needs a browser with Web Bluetooth: on iPhone use the free Bluefy browser (Safari has no Bluetooth access). Don't pair the adapter in iOS Settings; connect from the Live tab.</p>
   </div>
@@ -150,6 +164,8 @@ details li{margin:4px 0}
     <h2 style="margin-top:14px">Orders across the drive</h2><div class="scroll"><table id="sumTbl"></table></div>
     <div class="row" style="margin-top:12px"><button class="b" id="csvBtn">Download CSV</button><button class="b" id="copyBtn">Copy CSV</button><button class="b" id="clrBtn">Clear</button></div>
   </div>
+  <div class="card"><h2>Bends and sound</h2><div id="turnRes"></div>
+    <div class="row" style="margin-top:10px"><button class="b" id="audBtn">Save audio</button><button class="b" id="audClr">Discard audio</button></div><p class="muted" id="audInfo"></p></div>
   <div class="card"><h2>Order amplitude vs speed</h2><div class="fig" style="height:200px"><canvas id="vsChart"></canvas></div><p class="muted" style="margin:8px 0 0">A real fault rises and falls smoothly with speed. Red dashes: detection threshold.</p></div>
   <div class="card"><h2>Drive timeline</h2><div class="fig" style="height:170px"><canvas id="trend"></canvas></div><p class="muted" style="margin:8px 0 0">Blue: speed · white dots: biggest peak (mg) · red bands: when you pressed the button.</p></div>
   <div class="card"><h2>What to check</h2><div id="guide"></div></div>
@@ -176,7 +192,7 @@ details li{margin:4px 0}
 {
 const $=id=>document.getElementById(id);
 /* Defaults: 2014 BMW 330d xDrive Touring (F31), N57 straight-six, ZF 8HP, 225/40R19 */
-const DEF={tire:'225/40R19',axle:'2.56',drive:'prop',gears:'4.714,3.143,2.106,1.667,1.285,1.000,0.839,0.667',cyl:'6',rpmMode:'obd',gear:'8',rpmMan:'2000',motor:'9.0',spdMode:'gps',units:'mph',spdMan:'70',simSrc:'T1',tol:'6',minA:'6'};
+const DEF={tire:'225/40R19',axle:'2.56',drive:'prop',gears:'4.714,3.143,2.106,1.667,1.285,1.000,0.839,0.667',cyl:'6',rpmMode:'obd',gear:'8',rpmMan:'2000',motor:'9.0',spdMode:'gps',units:'mph',spdMan:'70',simSrc:'T1',tol:'6',minA:'6',yawFlip:'0'};
 let S={...DEF};
 try{Object.assign(S,JSON.parse(localStorage.getItem('ordertrace2')||'{}'))}catch(e){}
 const save=()=>{try{localStorage.setItem('ordertrace2',JSON.stringify(S))}catch(e){}};
@@ -192,7 +208,7 @@ ids.forEach(k=>{const el=$(k);if(!el)return;el.addEventListener('change',()=>{S[
 syncUI();
 
 /* ---------- tabs ---------- */
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+b.dataset.v));if(b.dataset.v==='res')renderRes();if(b.dataset.v==='live')cUI();drawAll()});
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+b.dataset.v));if(b.dataset.v==='res')renderRes();if(b.dataset.v==='live'){cUI();tUI()}drawAll()});
 
 /* ---------- state ---------- */
 const buf={t:[],x:[],y:[],z:[]};
@@ -254,7 +270,7 @@ $('obdBtn').onclick=obdConnect;
 
 /* ---------- sensors ---------- */
 function msg(t){$('msg').textContent=t;$('msg').classList.toggle('on',!!t)}
-function onMotion(e){const a=e.acceleration&&e.acceleration.x!=null?e.acceleration:e.accelerationIncludingGravity;if(!a||a.x==null)return;push(performance.now(),a.x,a.y,a.z);const g=e.accelerationIncludingGravity;if(g&&g.x!=null){const k=.1;grav.x+=k*(g.x-grav.x);grav.y+=k*(g.y-grav.y);grav.z+=k*(g.z-grav.z);inclUpd()}}
+function onMotion(e){const a=e.acceleration&&e.acceleration.x!=null?e.acceleration:e.accelerationIncludingGravity;if(!a||a.x==null)return;push(performance.now(),a.x,a.y,a.z);const g=e.accelerationIncludingGravity;if(g&&g.x!=null){const k=.1;grav.x+=k*(g.x-grav.x);grav.y+=k*(g.y-grav.y);grav.z+=k*(g.z-grav.z);inclUpd();yawUpd(e)}}
 /* a gap in the samples (screen locked, page in background) would make the window span the gap and give a
    nonsense sample rate, so start the window again */
 function push(t,x,y,z){if(buf.t.length&&t-buf.t[buf.t.length-1]>500)for(const k in buf)buf[k].length=0;buf.t.push(t);buf.x.push(x);buf.y.push(y);buf.z.push(z);if(buf.t.length>N*2){const n=buf.t.length-N;for(const k in buf)buf[k].splice(0,n)}}
@@ -273,8 +289,8 @@ async function start(){
  running=true;$('startBtn').textContent='Stop';$('recBtn').disabled=false;loop();
 }
 let geoId=null,loopT=null;
-function stop(){if(cRun)cStop();running=false;window.removeEventListener('devicemotion',onMotion);if(geoId!=null)navigator.geolocation.clearWatch(geoId);geoId=null;clearInterval(simTimer);clearTimeout(loopT);try{wake&&wake.release()}catch(e){}if(recording)toggleRec();$('startBtn').textContent='Start sensors';$('recBtn').disabled=true;cChkUI()}
-function startSim(){const sfs=60;let t0=performance.now();simT=0;simTimer=setInterval(()=>{const now=performance.now();while(t0<now){simT+=1/sfs;t0+=1000/sfs;const v=speedMps(),o=orders(v,rpmNow(v)),f=(o.find(x=>x.k===S.simSrc.slice(0,2))||{}).f||0,a=S.simSrc==='none'?0:0.22*Math.min(1,v/25);simPh+=2*Math.PI*f/sfs;const s=a*Math.sin(simPh)+(S.simSrc.endsWith('tone')?0.45*Math.sin(2*Math.PI*23.9*simT):0)+(Math.random()-.5)*0.12+0.05*Math.sin(2*Math.PI*1.3*simT);push(t0,s*.3,s*.2+(Math.random()-.5)*.05,s)}grav={x:0,y:-2,z:-9.6};inclUpd()},50)}
+function stop(){if(cRun)cStop();if(AU.on)micStop();running=false;window.removeEventListener('devicemotion',onMotion);if(geoId!=null)navigator.geolocation.clearWatch(geoId);geoId=null;clearInterval(simTimer);clearTimeout(loopT);try{wake&&wake.release()}catch(e){}if(recording)toggleRec();$('startBtn').textContent='Start sensors';$('recBtn').disabled=true;cChkUI()}
+function startSim(){const sfs=60;let t0=performance.now();simT=0;simTimer=setInterval(()=>{const now=performance.now();while(t0<now){simT+=1/sfs;t0+=1000/sfs;const v=speedMps(),o=orders(v,rpmNow(v)),f=(o.find(x=>x.k===S.simSrc.slice(0,2))||{}).f||0,a=S.simSrc==='none'?0:0.22*Math.min(1,v/25)*(S.simSrc==='T1L'?1+2.5*Math.max(0,latG(v,yawS)):1);simPh+=2*Math.PI*f/sfs;const s=a*Math.sin(simPh)+(S.simSrc.endsWith('tone')?0.45*Math.sin(2*Math.PI*23.9*simT):0)+(Math.random()-.5)*0.12+0.05*Math.sin(2*Math.PI*1.3*simT);push(t0,s*.3,s*.2+(Math.random()-.5)*.05,s)}grav={x:0,y:-2,z:-9.6};inclUpd();yawS=7*Math.sin(2*Math.PI*simT/27);yawT=performance.now()},50)}
 
 /* ---------- FFT ---------- */
 function fft(re,im){const n=re.length;for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]]}}
@@ -312,6 +328,7 @@ function loop(){if(!running)return;const v=speedMps(),rpm=rpmNow(v),sp=spectrum(
   const lastS=buf.t[buf.t.length-1],stale=performance.now()-lastS>1000||lastS===prevS;prevS=lastS;
   if(stale){$('vDot').style.background='var(--dim)';$('vTxt').textContent='Sensor paused. Keep the screen on and this page in front. Nothing is logged while paused.';loopT=setTimeout(loop,500);return}
   const pk=peaks(sp),top=pk[0],t=performance.now()/1000,o={};lastOrders.forEach(x=>{const r=orderAmp(sp,x.f);if(r)o[x.k]=r});
+  {const yw=yawNow(),fo=k=>(lastOrders.find(x=>x.k===k)||{}).f;cur={yw,lg:latG(v,yw),acc:accNow(v),au:audioNow(fo('T1'),fo('T2')),drv:obdDrive()}}
   hist.push({t,v:fromMps(v),o});while(hist.length&&t-hist[0].t>45)hist.shift();
   const j=judge(hist),best=j[0];
   $('pkF').textContent=top?top.f.toFixed(1):'—';$('pkA').textContent=top?top.a.toFixed(0):'—';
@@ -320,10 +337,10 @@ function loop(){if(!running)return;const v=speedMps(),rpm=rpmNow(v),sp=spectrum(
   else if(top){$('vDot').style.background='var(--dim)';const hi=lastOrders.filter(x=>x.f>=sp.fs/2).map(x=>x.k);$('vTxt').textContent=`Peak at ${top.f.toFixed(1)} Hz isn't following any order`+(sp.based?'':'. Capture a parked baseline to remove constant tones')+(hi.length?`. ${hi.join(', ')} are above the sensor range and can fold back as false peaks.`:'.')}
   else{$('vDot').style.background='var(--ok)';$('vTxt').textContent='No significant vibration'}
   if(cRun)cornerPush(v,o);if(!cRun||performance.now()%2000<600)cChkUI();
-  if(recording){const ld=obdLoad(),pd=obdPed(),row={t:(performance.now()-recStart)/1000,v:fromMps(v),rpm:rpm||0,ld,pd:pd==null?null:Math.max(0,pd-OBD.pedMin),f:top?top.f:0,a:top?top.a:0,mark:marking?1:0,o,j:best?(best.k+(best.conf?'*':best.fixed?'x':'?')):''};log.push(row);
+  if(recording){const ld=obdLoad(),pd=obdPed(),row={t:(performance.now()-recStart)/1000,v:fromMps(v),rpm:rpm||0,ld,pd:pd==null?null:Math.max(0,pd-OBD.pedMin),f:top?top.f:0,a:top?top.a:0,mark:marking?1:0,o,acc:cur.acc,yw:cur.yw,lg:cur.lg,drv:cur.drv,au:cur.au,j:best?(best.k+(best.conf?'*':best.fixed?'x':'?')):''};log.push(row);
    $('recInfo').textContent=`${Math.round(row.t)} s · ${log.length} samples`}
   if(marking)$('markBtn').textContent=`Feeling it… ${Math.round((performance.now()-markT0)/1000)} s. Tap when it stops`;
-  drawSpec();drawOrds()}
+  drawSpec();drawOrds();if($('tCard').offsetParent)tUI()}
  loopT=setTimeout(loop,500)}
 const uName=()=>S.units==='mph'?'mph':'km/h';
 function baseUI(){if(baseCap)return;$('baseInfo').textContent=baseline?`Baseline set (${baseline.fs.toFixed(0)} Hz). Constant tones are subtracted`:'No baseline yet. Capture one parked, engine idling';$('baseBtn').textContent=baseline?'Re-capture baseline':'Capture baseline (parked)';$('baseClr').style.display=baseline?'':'none'}
@@ -366,7 +383,7 @@ new ResizeObserver(drawAll).observe(document.body);
 
 /* ---------- recording & results ---------- */
 function toggleRec(){recording=!recording;if(recording){log=[];recStart=performance.now()}else if(marking){marking=false;$('markBtn').classList.remove('on');$('markBtn').textContent='I can feel it now'}
- $('recBtn').textContent=recording?'Stop recording':'Record';$('recBtn').classList.toggle('rec',recording);if(!recording)$('recInfo').textContent=log.length?`Saved ${log.length} samples. See Results`:''}
+ $('recBtn').textContent=recording?'Stop recording':'Record';$('recBtn').classList.toggle('rec',recording);if(!recording)$('recInfo').textContent=log.length?`Saved ${log.length} samples. See Results`:'';if(typeof tUI==='function')tUI()}
 const GUIDE={tyre:['Balance all four wheels; road-force balance if the shake survives a normal balance.','Check radial and lateral runout of tyre and rim; rotate front to rear to see if the shake moves.','Look for flat spots, bulges, belt separation, uneven wear, or a bent rim.','Check hub-centric rings, wheel seating, and torque. T2/T3 usually means out-of-round, not imbalance.'],
  shaft:['Mark and rotate the propshaft 180° on its flange to cancel stacked imbalance.','Inspect U-joints and the centre bearing for play or roughness.','D2 usually points to unequal working angles: measure them with the inclinometer (each joint ideally within 0.5° of its partner, under about 3°).','Check pinion and gearbox mounts, and any missing balance weights.','xDrive: the front propshaft turns at the same speed as the rear, so D1/D2 can come from either. Check both, and the transfer case.'],
  engine:['E1: crank pulley, flywheel/flexplate, torque converter or ancillary imbalance.','Firing order: misfire, worn or collapsed engine/gearbox mounts, exhaust touching the body.','E½: one cylinder weaker than the rest (compression, injector, coil).','Confirm by revving in neutral: a speed-related shake disappears, an rpm-related one stays.'],
@@ -375,7 +392,7 @@ const GUIDE={tyre:['Balance all four wheels; road-force balance if the shake sur
 function fixedTones(){const thr=+S.minA||6,mv=log.filter(r=>r.a>=thr&&r.v>3);if(mv.length<20)return null;const b={};mv.forEach(r=>{const i=Math.round(r.f*2);(b[i]=b[i]||[]).push(r)});
  const[i,rs]=Object.entries(b).sort((a,c)=>c[1].length-a[1].length)[0];const vs=rs.map(r=>r.v);return rs.length/mv.length>.4&&Math.max(...vs)-Math.min(...vs)>8?{f:i/2,pct:Math.round(rs.length/mv.length*100),a:rs.reduce((a,r)=>a+r.a,0)/rs.length}:null}
 const esc=s=>String(s).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
-function renderRes(){drawTrend();drawVs();
+function renderRes(){drawTrend();drawVs();$('turnRes').innerHTML=log.some(r=>r.lg!=null)?turnHTML():'<p class="muted">No bend data yet. Use the cornering test on the Live tab.</p>';audUI();
  if(!log.length){$('sumTop').textContent='No recording yet. Start sensors, capture a parked baseline, then Record (or just press the big button when you feel it).';$('markTbl').innerHTML='';$('sumTbl').innerHTML='';$('guide').innerHTML=guideHTML(Object.keys(GUIDE));return}
  const thr=+S.minA||6,u=uName(),j=judge(log),marked=log.filter(r=>r.mark),other=log.filter(r=>!r.mark&&r.v>3),out=[];let verdict=null;
  if(marked.length){const rows=KEYS.map(k=>{const a=marked.map(r=>r.o[k]).filter(Boolean).map(x=>x.a),b=other.map(r=>r.o[k]).filter(Boolean).map(x=>x.a);if(!a.length)return null;const ma=a.reduce((s,x)=>s+x,0)/a.length,mb=b.length?b.reduce((s,x)=>s+x,0)/b.length:0;return{k,ma,mb,r:(ma+1)/(mb+1)}}).filter(Boolean).sort((a,b)=>b.r-a.r);
@@ -393,9 +410,9 @@ function renderRes(){drawTrend();drawVs();
  $('sumTbl').innerHTML=j.length?`<tr><th>Order</th><th class="num">Strong for</th><th>Speeds</th><th class="num">Peak</th><th>Follows speed?</th></tr>`+j.map(r=>`<tr><td>${r.k}</td><td class="num">${(r.n/2).toFixed(0)} s</td><td>${r.vmin.toFixed(0)}–${r.vmax.toFixed(0)}</td><td class="num">${r.max.toFixed(0)} mg</td><td>${r.conf?'Yes, confirmed':r.fixed?'No, a fixed tone':r.unclear?'Unclear':'Not tested (speed too steady)'}</td></tr>`).join(''):`<tr><td class="muted">No order stayed above ${thr} mg long enough to test.</td></tr>`;
  const order=[verdict,...j.map(x=>OI(x.k)[1]),'unmatched'].filter((x,i,a)=>x&&a.indexOf(x)===i);$('guide').innerHTML=guideHTML(order)}
 function guideHTML(list){return list.filter(k=>GUIDE[k]).map((k,i)=>`<details ${i?'':'open'}><summary style="color:${k in SRC?SRC[k].c:'var(--ink)'}">${k in SRC?SRC[k].n:'Not matched to an order'}</summary><ul>${GUIDE[k].map(g=>`<li>${esc(g)}</li>`).join('')}</ul></details>`).join('')}
-function csv(){return `t_s,speed_${S.units},rpm,engine_load_pct,pedal_pct,peak_hz,peak_mg,felt,${KEYS.map(k=>k+'_mg').join(',')},${KEYS.map(k=>k+'_hz').join(',')},live_verdict\n`+log.map(l=>[l.t.toFixed(1),l.v.toFixed(1),Math.round(l.rpm),l.ld==null?'':l.ld.toFixed(0),l.pd==null?'':l.pd.toFixed(0),l.f.toFixed(2),l.a.toFixed(1),l.mark,...KEYS.map(k=>l.o[k]?l.o[k].a.toFixed(1):''),...KEYS.map(k=>l.o[k]?l.o[k].f.toFixed(2):''),l.j].join(',')).join('\n')}
+function csv(){return `t_s,speed_${S.units},rpm,engine_load_pct,pedal_pct,peak_hz,peak_mg,felt,${KEYS.map(k=>k+'_mg').join(',')},${KEYS.map(k=>k+'_hz').join(',')},live_verdict,accel_mps2,yaw_dps,lat_g,bend,throttle,rumble_db,rumble_30_150_db,rumble_150_600_db,rumble_peak_hz,rumble_pulse_T1_pct,rumble_pulse_T2_pct,audio_t_s\n`+log.map(l=>[l.t.toFixed(1),l.v.toFixed(1),Math.round(l.rpm),l.ld==null?'':l.ld.toFixed(0),l.pd==null?'':l.pd.toFixed(0),l.f.toFixed(2),l.a.toFixed(1),l.mark,...KEYS.map(k=>l.o[k]?l.o[k].a.toFixed(1):''),...KEYS.map(k=>l.o[k]?l.o[k].f.toFixed(2):''),l.j,l.acc==null?'':l.acc.toFixed(2),l.yw==null?'':l.yw.toFixed(1),l.lg==null?'':l.lg.toFixed(3),l.lg==null?'':({L:'left',R:'right',S:'straight'}[turnOf(l.lg)]||'curve'),l.drv||'',...(l.au?[l.au.db.toFixed(1),l.au.low.toFixed(1),l.au.mid.toFixed(1),l.au.pk.toFixed(0),l.au.m1==null?'':l.au.m1.toFixed(1),l.au.m2==null?'':l.au.m2.toFixed(1),l.au.t.toFixed(1)]:Array(7).fill(''))].join(',')).join('\n')}
 /* iPhone: share sheet (Save to Files, AirDrop, mail). Elsewhere: a normal download. */
-async function saveFile(name,text){const f=new File([text],name,{type:'text/csv'});if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:name});return}catch(e){if(e&&e.name==='AbortError')return}}
+async function saveFile(name,data,type='text/csv'){const f=new File([data],name,{type});if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:name});return}catch(e){if(e&&e.name==='AbortError')return}}
  const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),10000)}
 const stamp=d=>new Date(d).toISOString().slice(0,16).replace(':','');
 $('csvBtn').onclick=()=>saveFile('road-test-'+stamp(Date.now())+'.csv',csv());
@@ -410,6 +427,86 @@ function spdChk(){const d=+$('indic').value;if(!d||gpsMps==null){return}const g=
 $('indic').addEventListener('input',spdChk);
 
 try{baseline=JSON.parse(localStorage.getItem('ordertrace_base')||'null')}catch(e){}baseUI();
+/* ---------- turning (gyroscope) ---------- */
+const IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+let yawS=0,yawT=0,cur={};
+/* Yaw rate about the vertical in deg/s, + = turning left: rotation rate projected on 'up'. The spec gives
+   accelerationIncludingGravity pointing up at rest; iOS reports the opposite sign, so 'up' is flipped there.
+   The Vehicle tab can flip the result if a phone still gets it backwards. */
+function yawUpd(e){const r=e.rotationRate;if(!r||r.alpha==null)return;const gm=Math.hypot(grav.x,grav.y,grav.z);if(gm<5)return;
+ const y=((r.beta||0)*grav.x+(r.gamma||0)*grav.y+(r.alpha||0)*grav.z)/gm*(IOS?-1:1)*(S.yawFlip==='1'?-1:1);yawS+=.05*(y-yawS);yawT=performance.now()}
+const yawNow=()=>performance.now()-yawT<1500?yawS:null;
+const latG=(v,y)=>y==null?null:v*y*Math.PI/180/G;   /* sideways g from speed (m/s) and yaw rate */
+const turnOf=g=>g==null?'':g>=.08?'L':g<=-.08?'R':Math.abs(g)<.04?'S':'';
+function accNow(v){const now=performance.now()/1000,old=vh.find(x=>now-x.t<=2.5)||vh[0];return old&&now-old.t>.8?(v-old.v)/(now-old.t):0}
+
+/* ---------- microphone: rumble level, and how strongly it pulses at wheel rate ---------- */
+const AU={on:false,ctx:null,st:null,sp:null,env:[],last:0,an:null,fb:null,rec:null,chunks:[],t0:0,mime:'',rate:100};
+const micStat=t=>$('micStat').textContent='Microphone: '+t;
+async function micToggle(){if(AU.on){micStop();return}
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){micStat('this browser has no microphone access');return}
+ try{micStat('starting…');
+  const st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1}});
+  const ctx=new (window.AudioContext||window.webkitAudioContext)();if(ctx.state!=='running')await ctx.resume();
+  const src=ctx.createMediaStreamSource(st),hp=ctx.createBiquadFilter(),lp=ctx.createBiquadFilter(),sp=ctx.createScriptProcessor(4096,1,1),mute=ctx.createGain(),an=ctx.createAnalyser();
+  hp.type='highpass';hp.frequency.value=30;lp.type='lowpass';lp.frequency.value=300;mute.gain.value=0;an.fftSize=8192;an.smoothingTimeConstant=.6;
+  /* envelope: RMS of the 30-300 Hz band in 10 ms blocks (100 per second) */
+  const blk=Math.round(ctx.sampleRate/AU.rate);let acc=0,n=0;
+  sp.onaudioprocess=e=>{const d=e.inputBuffer.getChannelData(0);for(let i=0;i<d.length;i++){acc+=d[i]*d[i];if(++n===blk){AU.env.push(Math.sqrt(acc/n));acc=0;n=0}}if(AU.env.length>1024)AU.env.splice(0,AU.env.length-512);AU.last=performance.now()};
+  src.connect(hp);hp.connect(lp);lp.connect(sp);sp.connect(mute);mute.connect(ctx.destination);src.connect(an);
+  Object.assign(AU,{on:true,ctx,st,sp,an,fb:new Float32Array(an.frequencyBinCount),env:[],chunks:[],t0:performance.now(),rec:null});
+  if(window.MediaRecorder){const mt=['audio/mp4','audio/webm;codecs=opus','audio/webm'].find(m=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(m));
+   try{const r=new MediaRecorder(st,mt?{mimeType:mt}:undefined);r.ondataavailable=e=>{if(e.data&&e.data.size){AU.chunks.push(e.data);audUI()}};r.start(5000);AU.rec=r;AU.mime=r.mimeType||mt||'audio/mp4'}catch(e){AU.rec=null}}
+  $('micBtn').textContent='Microphone off';micStat(`on · ${(ctx.sampleRate/1000).toFixed(1)} kHz`+(AU.rec?' · recording audio':' · sound analysis only (this browser can\'t save audio)'));audUI();cChkUI();
+ }catch(e){micStat('could not start: '+errTxt(e)+(e&&e.name==='NotAllowedError'?'. Allow the microphone for this browser in iPhone Settings › Privacy & Security › Microphone, then reload.':''))}}
+function micStop(){if(!AU.on)return;AU.on=false;try{AU.rec&&AU.rec.state!=='inactive'&&AU.rec.stop()}catch(e){}try{AU.st.getTracks().forEach(t=>t.stop())}catch(e){}try{AU.sp.onaudioprocess=null;AU.ctx.close()}catch(e){}
+ $('micBtn').textContent='Microphone';micStat('off');setTimeout(()=>{audUI();if(AU.chunks.length)micStat('off · audio kept until you discard it (Results tab)')},600);cChkUI()}
+/* rumble level (dB, relative), band levels, loudest low pitch, and % pulsing of the rumble at wheel order T1/T2 */
+function audioNow(f1,f2){if(!AU.on||performance.now()-AU.last>1500||AU.env.length<128)return null;
+ const E=AU.env.slice(-256),n=E.length,m=mean(E),re=new Float64Array(1024),im=new Float64Array(1024);let ws=0;
+ for(let i=0;i<n;i++){const w=.5-.5*Math.cos(2*Math.PI*i/(n-1));ws+=w;re[i]=(E[i]-m)*w}fft(re,im);
+ const df=AU.rate/1024,tol=(+S.tol||6)/100,mod=f=>{if(!f||f<3||f>AU.rate/2*.9||!(m>0))return null;let b=0;for(let k=Math.floor(f*(1-tol)/df);k<=Math.ceil(f*(1+tol)/df);k++)b=Math.max(b,Math.hypot(re[k],im[k])*2/ws);return b/m*100};
+ const last=E.slice(-100),db=20*Math.log10(Math.sqrt(mean(last.map(x=>x*x)))+1e-9);
+ AU.an.getFloatFrequencyData(AU.fb);const bw=AU.ctx.sampleRate/AU.an.fftSize,band=(a,b)=>{let p=0;for(let k=Math.ceil(a/bw);k<=Math.floor(b/bw);k++)p+=Math.pow(10,AU.fb[k]/10);return 10*Math.log10(p+1e-12)};
+ let pk=0,pv=-1e9;for(let k=Math.ceil(20/bw);k<=Math.floor(500/bw);k++)if(AU.fb[k]>pv){pv=AU.fb[k];pk=k*bw}
+ return{db,low:band(30,150),mid:band(150,600),pk,m1:mod(f1),m2:mod(f2),t:(performance.now()-AU.t0)/1000}}
+function audUI(){const n=AU.chunks.reduce((a,c)=>a+c.size,0);if(!$('audBtn'))return;$('audBtn').style.display=$('audClr').style.display=n?'':'none';
+ $('audInfo').textContent=n?`Audio: ${(n/1048576).toFixed(1)} MB${AU.on?' so far (still recording)':''}. It is kept only while this page is open, so save it before leaving.`:'No audio recorded. Tap Microphone on the Live tab to record sound with the drive.'}
+$('micBtn').onclick=micToggle;
+$('audBtn').onclick=async()=>{if(AU.rec&&AU.rec.state==='recording'){try{AU.rec.requestData()}catch(e){}await new Promise(r=>setTimeout(r,400))}
+ saveFile(`road-audio-${stamp(AU.t0?Date.now()-(performance.now()-AU.t0):Date.now())}.${/webm/.test(AU.mime)?'webm':'m4a'}`,new Blob(AU.chunks,{type:AU.mime}),AU.mime)};
+$('audClr').onclick=()=>{if(!confirm('Discard the recorded audio?'))return;AU.chunks=[];audUI()};
+
+/* ---------- cornering test: shake and rumble in left vs right bends, under power vs lifted off ---------- */
+const TN={SP:'Straight, power',SC:'Straight, lifted off',LP:'Left bend, power',LC:'Left bend, lifted off',RP:'Right bend, power',RC:'Right bend, lifted off'};
+const thrOf=r=>r.drv||(r.acc<-ACC_S?'off':'on');   /* without OBD pedal/load, steady counts as power */
+function turnData(){const bw=S.units==='mph'?5:8,vMin=S.units==='mph'?20:30,C={},cnt={};
+ log.forEach(r=>{if(r.v<vMin||r.lg==null||Math.abs(r.acc||0)>ACC_MAX||!r.o||!r.o.T1)return;const t=turnOf(r.lg);if(!t)return;const k=t+(thrOf(r)==='on'?'P':'C'),b=Math.floor(r.v/bw);cnt[k]=(cnt[k]||0)+1;((C[k]=C[k]||{})[b]=C[k][b]||[]).push(r)});
+ const grp=ks=>{const g={};ks.forEach(k=>C[k]&&Object.entries(C[k]).forEach(([b,a])=>(g[b]=g[b]||[]).push(...a)));return g};
+ const cmp=(A,B,f)=>{const v=Object.keys(A).filter(b=>B[b]&&A[b].length>=3&&B[b].length>=3).map(b=>{const a=A[b].map(f).filter(x=>x!=null),c=B[b].map(f).filter(x=>x!=null);return a.length&&c.length?[mean(a),mean(c)]:null}).filter(Boolean);return v.length?{bands:v.length,a:mean(v.map(x=>x[0])),c:mean(v.map(x=>x[1]))}:null};
+ return{cnt,grp,cmp}}
+const fT1=r=>r.o.T1?r.o.T1.a:null,fDb=r=>r.au?r.au.db:null,fM1=r=>r.au?r.au.m1:null;
+function turnHTML(){const {cnt,grp,cmp}=turnData(),hasAu=log.some(r=>r.au),ratio=x=>x?((x.a+1)/(x.c+1)).toFixed(2)+'×':'—',dif=(x,u)=>{if(!x)return'—';const d=x.a-x.c;return Math.abs(d)<.05?'0'+u:(d>0?'+':'')+d.toFixed(1)+u};
+ const SP=grp(['SP']);let h=`<div class="scroll"><table><tr><th>Condition</th><th class="num">n</th><th class="num">Shake</th>${hasAu?'<th class="num">Rumble</th><th class="num">Pulse</th>':''}</tr>`;
+ for(const k of Object.keys(TN)){const n=cnt[k]||0;if(k==='SP'){h+=`<tr><td>${TN[k]} (ref.)</td><td class="num">${n}</td><td class="num">1.00×</td>${hasAu?'<td class="num">0 dB</td><td class="num">0</td>':''}</tr>`;continue}
+  const G=grp([k]);h+=`<tr><td>${TN[k]}</td><td class="num">${n}</td><td class="num">${ratio(cmp(G,SP,fT1))}</td>${hasAu?`<td class="num">${dif(cmp(G,SP,fDb),' dB')}</td><td class="num">${dif(cmp(G,SP,fM1),'%')}</td>`:''}</tr>`}
+ h+=`</table></div><p class="muted" style="margin:6px 0 0">Compared with straight driving under power at the same speeds. Shake: wheel-speed vibration (T1).${hasAu?' Rumble: sound level, 30–600 Hz. Pulse: how strongly the rumble throbs at wheel speed (percentage points).':''} n: half-second samples.</p>`;const out=[],L=grp(['LP','LC']),R=grp(['RP','RC']),lr=cmp(L,R,fT1);
+ if(lr){const x=(lr.a+1)/(lr.c+1);out.push(x>=1.25?`<b style="color:var(--hit)">Shake is ${x.toFixed(1)}× stronger in left bends than right bends</b> at the same speeds. A left bend puts weight on the right-hand wheels, so this points to the <b>right front</b>: wheel bearing, hub or tyre.`:x<=.8?`<b style="color:var(--hit)">Shake is ${(1/x).toFixed(1)}× stronger in right bends than left bends</b> at the same speeds. A right bend puts weight on the left-hand wheels, so this points to the <b>left front</b>: wheel bearing, hub or tyre.`:`Left and right bends give similar shake (${x.toFixed(2)}×).`);
+  const ls=cmp(L,R,fDb);if(ls&&Math.abs(ls.a-ls.c)>=3)out.push(`The rumble is ${Math.abs(ls.a-ls.c).toFixed(0)} dB louder in ${ls.a>ls.c?'left':'right'} bends. Rumble that grows with cornering load is typical of a wheel bearing.`);
+  const bend=x>=1.25?'L':x<=.8?'R':null;if(bend){const p=cmp(grp([bend+'P']),grp([bend+'C']),fT1),s=cmp(grp(['SP']),grp(['SC']),fT1);
+   if(p){const px=(p.a+1)/(p.c+1),sx=s?(s.a+1)/(s.c+1):null;out.push(px>=1.3&&(sx==null||sx<1.15)?`In ${bend==='L'?'left':'right'} bends it is ${px.toFixed(1)}× worse under power than lifted off, more than on the straight. That points to the ${bend==='L'?'right':'left'} front driveshaft (CV joint) working at an angle under torque.`:px<1.15?`Lifting off in the bend doesn't help (${px.toFixed(2)}×), so it's the cornering load, not the drive: a wheel bearing or tyre is more likely than a CV joint.`:`Under power vs lifted off in the bend: ${px.toFixed(2)}×, not decisive.`)}}}
+ else out.push('Needs left and right bends at matching speeds to compare.');
+ const need=Object.keys(TN).filter(k=>(cnt[k]||0)<20).map(k=>TN[k].toLowerCase());if(need.length)out.push(`<span class="muted">More data would help for: ${need.join('; ')} (aim for 20+ samples, 10 s, each).</span>`);
+ return h+out.map(s=>`<p style="margin:10px 0 0">${s}</p>`).join('')}
+function tUI(){const r=recording;$('tRunBtn').textContent=r?'Stop cornering test':'Start cornering test';$('tRunBtn').classList.toggle('rec',r);
+ const y=yawNow(),lg=latG(speedMps(),y);$('turnNow').textContent=y==null?(running?'no gyroscope data':'sensors off'):lg>=.08?`↰ left bend, ${lg.toFixed(2)} g`:lg<=-.08?`↱ right bend, ${(-lg).toFixed(2)} g`:Math.abs(lg)<.04?'straight':'gentle curve (not used)';
+ $('tOut').innerHTML=log.some(r=>r.lg!=null)?turnHTML():''}
+$('tRunBtn').onclick=async()=>{if(recording){toggleRec();tUI();return}
+ if(S.spdMode==='manual'||(S.spdMode==='obd'&&!obdFresh())){cChkUI();$('tInfo').textContent='Not started: '+cReady().filter(x=>x.s==='bad').map(x=>x.t).join('. ')+'.';return}
+ if(!running)await start();if(!running)return;const t0=performance.now();while(!sensFresh()&&performance.now()-t0<3000)await new Promise(r=>setTimeout(r,200));
+ const b=cReady().filter(x=>x.s==='bad');if(b.length){$('tInfo').textContent='Not started: '+b.map(x=>x.t).join('. ')+'.';return}
+ if(log.length&&!confirm('Starting a new test replaces the current recording. Save it first (Results tab) if you need it. Continue?'))return;
+ $('tInfo').textContent='';toggleRec();tUI()};
 /* ---------- corner test: staged. 1 front reference, 2 rear reference, then left vs right on the stronger axle ---------- */
 const POS=['F','R','FL','FR','RL','RR'],CN={F:'Front reference',R:'Rear reference',FL:'Front left',FR:'Front right',RL:'Rear left',RR:'Rear right'},CC={F:'#9fb3c8',R:'#c58cff',FL:'#4ea8ff',FR:'#ff7a45',RL:'#3ddc97',RR:'#e6c84f'};
 const MH={F:'Front passenger footwell, flat on the floor, pushed against the centre tunnel.',R:'Rear footwell behind the passenger, flat on the floor, pushed against the centre tunnel (same spot as the front, one row back).',
@@ -431,13 +528,13 @@ function cornerPush(v,o){if((S.spdMode==='obd'&&!obdFresh())||(S.spdMode==='gps'
  const now=performance.now()/1000,old=vh.find(x=>now-x.t<=2.5)||vh[0],acc=old&&now-old.t>.8?(v-old.v)/(now-old.t):0,a=Math.abs(acc),dr=obdDrive();
  /* with OBD pedal/load: steady cruising counts as under power and any lift-off as overrun; without it, judge from speed change */
  const st=a>ACC_MAX?'X':dr?(dr==='on'?'P':'C'):a<ACC_S?'S':acc>0?'P':'C',ld=obdLoad(),pd=obdPed(),rp=obdFresh()?OBD.rpm:null;
- cRun.rows.push([+fromMps(v).toFixed(1),o.T1?+o.T1.a.toFixed(1):null,o.T2?+o.T2.a.toFixed(1):null,o.D1?+o.D1.a.toFixed(1):null,st,+acc.toFixed(2),+(now-cRun.t0).toFixed(1),rp==null?null:Math.round(rp),ld==null?null:Math.round(ld),pd==null?null:Math.round(Math.max(0,pd-OBD.pedMin)),o.T1?+o.T1.f.toFixed(2):null,dr&&st!=='X'?'obd':'speed']);
+ cRun.rows.push([+fromMps(v).toFixed(1),o.T1?+o.T1.a.toFixed(1):null,o.T2?+o.T2.a.toFixed(1):null,o.D1?+o.D1.a.toFixed(1):null,st,+acc.toFixed(2),+(now-cRun.t0).toFixed(1),rp==null?null:Math.round(rp),ld==null?null:Math.round(ld),pd==null?null:Math.round(Math.max(0,pd-OBD.pedMin)),o.T1?+o.T1.f.toFixed(2):null,dr&&st!=='X'?'obd':'speed',cur.yw==null?null:+cur.yw.toFixed(1),cur.lg==null?null:+cur.lg.toFixed(3),cur.au?+cur.au.db.toFixed(1):null,cur.au&&cur.au.m1!=null?+cur.au.m1.toFixed(1):null]);
  if(cRun.rows.length%10===0)try{localStorage.setItem('ordertrace_crun',JSON.stringify({pos:cRun.pos,rows:cRun.rows,date:cRun.date,u:S.units}))}catch(e){}
  const s=Math.round(now-cRun.t0);$('cInfo').textContent=`Recording ${CN[cRun.pos]}: ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')} · ${cRun.rows.length} samples · ${fromMps(v).toFixed(0)} ${uName()} · ${CST[st==='X'?(acc>0?'XP':'XC'):dr?'o'+st:st]}`}
 /* one CSV per run; 'all' puts every saved run in one file with a position column */
 const CSTN={S:'steady',P:'power',C:'liftoff',X:'excluded'};
-function cCsv(keys){return `position,run_date,t_s,speed_${S.units},state,state_from,accel_mps2,rpm,engine_load_pct,pedal_pct,T1_mg,T1_hz,T2_mg,D1_mg\n`+keys.filter(k=>corners[k]).flatMap(k=>{const c=corners[k],f=cF(c),d=new Date(c.date).toISOString();
- return c.rows.map(r=>[k,d,r[6]??'',(r[0]*f).toFixed(1),CSTN[r[4]]||r[4],r[11]||'speed',r[5]??'',r[7]??'',r[8]??'',r[9]??'',r[1]??'',r[10]??'',r[2]??'',r[3]??''].join(','))}).join('\n')}
+function cCsv(keys){return `position,run_date,t_s,speed_${S.units},state,state_from,accel_mps2,rpm,engine_load_pct,pedal_pct,T1_mg,T1_hz,T2_mg,D1_mg,yaw_dps,lat_g,rumble_db,rumble_pulse_T1_pct\n`+keys.filter(k=>corners[k]).flatMap(k=>{const c=corners[k],f=cF(c),d=new Date(c.date).toISOString();
+ return c.rows.map(r=>[k,d,r[6]??'',(r[0]*f).toFixed(1),CSTN[r[4]]||r[4],r[11]||'speed',r[5]??'',r[7]??'',r[8]??'',r[9]??'',r[1]??'',r[10]??'',r[2]??'',r[3]??'',r[12]??'',r[13]??'',r[14]??'',r[15]??''].join(','))}).join('\n')}
 /* rows of a saved run in the current units, hard accel/brake samples removed */
 const cF=c=>!c.u||c.u===S.units?1:c.u==='mph'?1.609344:1/1.609344;
 function cRows(k){const c=corners[k],f=cF(c);return c.rows.filter(r=>r[4]!=='X').map(r=>[r[0]*f,...r.slice(1)])}
@@ -496,6 +593,8 @@ function cReady(){const c=[],fresh=sensFresh();
  else c.push({s:'bad',t:'Speed: manual can\'t be used. Pick OBD or GPS on the Vehicle tab'});
  const ex=OBD.ok?OBD.ext:null;c.push(ex&&ex.includes('0149')?{s:'ok',t:'Throttle: pedal ✓'}:ex&&ex.includes('0104')?{s:'ok',t:'Throttle: engine load ✓'}:{s:'warn',t:ex?'Throttle: car gives no pedal data, judged from speed change':'Throttle: no OBD, judged from speed change'});
  if(fresh&&S.spdMode!=='sim'){const gm=Math.hypot(grav.x,grav.y,grav.z),tl=gm>5?Math.acos(Math.min(1,Math.abs(grav.z)/gm))*180/Math.PI:null;if(tl!=null)c.push(tl<12?{s:'ok',t:'Phone flat ✓'}:{s:'warn',t:`Phone tilted ${tl.toFixed(0)}°. Lay it flat`})}
+ if(fresh&&S.spdMode!=='sim'&&yawNow()==null)c.push({s:'warn',t:'No gyroscope data: bends not recorded'});
+ if(AU.on)c.push({s:'ok',t:'Microphone ✓'});
  return c}
 function cChkUI(){const el=$('cChk');if(!el)return;el.innerHTML=cReady().map(x=>`<span class="${x.s}">${esc(x.t)}</span>`).join('')}
 /* stop the run in progress and keep it if it is long enough */
@@ -513,7 +612,7 @@ $('cDelBtn').onclick=()=>{if(!confirm(`Delete the ${CN[cSel]} run? Save it as CS
 $('cCsvBtn').onclick=()=>saveFile(`corner-${cSel}-${stamp(corners[cSel].date)}.csv`,cCsv([cSel]));
 $('cAllBtn').onclick=()=>saveFile(`corner-all-${stamp(Date.now())}.csv`,cCsv(POS));
 $('cCopyBtn').onclick=async()=>{try{await navigator.clipboard.writeText(cCsv([cSel]));$('cCopyBtn').textContent='Copied'}catch(e){$('cCopyBtn').textContent='Copy failed'}setTimeout(()=>$('cCopyBtn').textContent='Copy',1500)};
-cSel=cNext();cUI();
+cSel=cNext();cUI();tUI();audUI();
 
 document.addEventListener('visibilitychange',async()=>{if(running&&document.visibilityState==='visible'){try{wake=await navigator.wakeLock?.request('screen')}catch(e){}}});
 $('startBtn').onclick=start;$('recBtn').onclick=toggleRec;
