@@ -142,10 +142,10 @@ details li{margin:4px 0}
 
 <section class="view" id="v-tools">
   <div class="card"><h2>Corner test: which corner is it?</h2>
-    <p class="muted" style="margin-top:0">Put the phone flat and firm on the floor at one corner (footwells, or boot corners for the rear), screen facing up. Start a run, drive the same route through the speeds where you feel it, then stop once parked. Repeat for each corner with the same mounting, same road, same direction and same lane. Through each speed where you feel it, include some gentle acceleration and some lifting off (no brakes). Accelerate only about as fast as the car slows on lift-off. Harder acceleration makes the reading lower and isn't used. Use Comfort or Sport mode, not ECO PRO: ECO PRO coasting disconnects the engine on lift-off, which removes the load reversal the test relies on.</p>
-    <p class="muted" style="text-align:center;margin:0 0 6px">▲ Front of car</p>
-    <div class="cgrid" id="cGrid"></div>
-    <div class="row" style="margin-top:10px"><button class="b pri" id="cRunBtn">Start run</button><button class="b" id="cDelBtn">Delete this corner</button></div>
+    <p class="muted" style="margin-top:0">Four runs, each over the same route, direction, lane and speeds. 1: front reference. 2: rear reference. The stronger end is then split: 3 and 4 measure its left and right sides. Tap a step to see where the phone goes, start the run, and stop it once parked. Phone flat, screen up, held firm (non-slip mat or tape).</p>
+    <p class="muted">Through each speed where you feel it, include some steady driving, some gentle acceleration and some lifting off (no brakes). Accelerate only about as fast as the car slows on lift-off: harder acceleration makes the reading lower and isn't used. Use Comfort or Sport mode, not ECO PRO, whose coasting disconnects the engine on lift-off.</p>
+    <div id="cGrid"></div>
+    <div class="row" style="margin-top:10px"><button class="b pri" id="cRunBtn">Start run</button><button class="b" id="cDelBtn">Delete this run</button></div>
     <p class="muted" id="cInfo"></p>
     <div id="cOut"></div>
     <div class="fig" style="height:190px;margin-top:10px"><canvas id="cChart"></canvas></div>
@@ -385,10 +385,14 @@ function spdChk(){const d=+$('indic').value;if(!d||gpsMps==null){return}const g=
 $('indic').addEventListener('input',spdChk);
 
 try{baseline=JSON.parse(localStorage.getItem('ordertrace_base')||'null')}catch(e){}baseUI();
-/* ---------- corner test: one run per corner, compared at matched speeds ---------- */
-const CORN=['FL','FR','RL','RR'],CN={FL:'Front left',FR:'Front right',RL:'Rear left',RR:'Rear right'},CC={FL:'#4ea8ff',FR:'#ff7a45',RL:'#3ddc97',RR:'#e6c84f'};
-let corners={},cSel='FL',cRun=null;
+/* ---------- corner test: staged. 1 front reference, 2 rear reference, then left vs right on the stronger axle ---------- */
+const POS=['F','R','FL','FR','RL','RR'],CN={F:'Front reference',R:'Rear reference',FL:'Front left',FR:'Front right',RL:'Rear left',RR:'Rear right'},CC={F:'#9fb3c8',R:'#c58cff',FL:'#4ea8ff',FR:'#ff7a45',RL:'#3ddc97',RR:'#e6c84f'};
+const MH={F:'Front passenger footwell, flat on the floor, pushed against the centre tunnel.',R:'Rear footwell behind the passenger, flat on the floor, pushed against the centre tunnel (same spot as the front, one row back).',
+ FL:'Floor under the front edge of the driver\'s seat, outer side by the sill, on a non-slip mat or taped down. Never in the pedal area.',FR:'Floor under the front edge of the passenger seat, outer side by the sill. Mirror of the front-left spot.',
+ RL:'Rear left footwell, outer edge by the door sill.',RR:'Rear right footwell, outer edge by the door sill. Mirror of the rear-left spot.'};
+let corners={},cSel='F',cRun=null,cAxle=null;
 try{corners=JSON.parse(localStorage.getItem('ordertrace_corners')||'{}')||{}}catch(e){corners={}}
+try{cAxle=localStorage.getItem('ordertrace_axle')||null}catch(e){}
 const cSave=()=>{try{localStorage.setItem('ordertrace_corners',JSON.stringify(corners))}catch(e){}};
 const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
 /* Speed changing inside the ~4 s FFT window smears the wheel-order peak and reads LOW
@@ -402,43 +406,57 @@ function cornerPush(v,o){const now=performance.now()/1000,old=vh.find(x=>now-x.t
 /* rows of a saved run in the current units, hard accel/brake samples removed */
 const cF=c=>!c.u||c.u===S.units?1:c.u==='mph'?1.609344:1/1.609344;
 function cRows(k){const c=corners[k],f=cF(c);return c.rows.filter(r=>r[4]!=='X').map(r=>[r[0]*f,...r.slice(1)])}
-function cCompare(){const have=CORN.filter(k=>corners[k]&&corners[k].rows.length>=10);if(!have.length)return null;
+function cCompare(){const have=POS.filter(k=>corners[k]&&corners[k].rows.length>=10);if(!have.length)return null;
  const bw=S.units==='mph'?5:8,vMin=S.units==='mph'?20:30,bOf=v=>Math.floor(v/bw)*bw,R={};have.forEach(k=>R[k]=cRows(k).filter(r=>r[0]>=vMin));
  /* compare on T1 unless T2 is clearly the bigger wheel order (out-of-round tyre / rim) */
  const avg=i=>{const a=have.flatMap(k=>R[k].map(r=>r[i])).filter(x=>x!=null);return a.length?mean(a):0},oi=avg(2)>1.2*avg(1)?2:1,ok=oi===2?'T2':'T1',band={};
  have.forEach(k=>R[k].forEach(r=>{if(r[oi]==null)return;const b=bOf(r[0]);band[b]=band[b]||{};(band[b][k]=band[b][k]||[]).push(r[oi])}));
  const bands=Object.keys(band).map(Number).sort((a,b)=>a-b),tbl=bands.map(b=>({b,vals:Object.fromEntries(have.map(k=>[k,band[b][k]&&band[b][k].length>=6?mean(band[b][k]):null]))}));
- const common=tbl.filter(t=>Object.values(t.vals).filter(x=>x!=null).length>=2),score={};
- have.forEach(k=>{const rs=common.filter(t=>t.vals[k]!=null).map(t=>t.vals[k]/mean(Object.values(t.vals).filter(x=>x!=null)));score[k]=rs.length?mean(rs):null});
+ /* a vs b over the speed bands both runs covered */
+ const pair=(a,b)=>{if(!R[a]||!R[b])return null;const c=tbl.filter(t=>t.vals[a]!=null&&t.vals[b]!=null);if(!c.length)return{n:0};const ma=mean(c.map(t=>t.vals[a])),mb=mean(c.map(t=>t.vals[b]));return{n:c.length,ma,mb,x:(ma+1)/(mb+1),lo:c[0].b,hi:c[c.length-1].b+bw}};
  const lr=rows=>{const by={};rows.forEach(r=>{if(r[oi]==null||(r[4]!=='P'&&r[4]!=='C'))return;const b=bOf(r[0]);(by[b]=by[b]||{P:[],C:[]})[r[4]].push(r[oi])});
   const q=Object.values(by).filter(x=>x.P.length>=3&&x.C.length>=3);return q.length?{ratio:mean(q.map(x=>(mean(x.P)+1)/(mean(x.C)+1))),bands:q.length,p:mean(q.map(x=>mean(x.P))),c:mean(q.map(x=>mean(x.C)))}:null};
  const all=have.flatMap(k=>R[k]),aP=all.filter(r=>r[4]==='P'&&r[5]!=null).map(r=>r[5]),aC=all.filter(r=>r[4]==='C'&&r[5]!=null).map(r=>-r[5]),loadBy={};have.forEach(k=>loadBy[k]=lr(R[k]));
- return{have,tbl,common,score,ok,bw,load:lr(all),loadBy,aP:aP.length?mean(aP):null,aC:aC.length?mean(aC):null}}
+ return{have,tbl,ok,bw,pair,load:lr(all),loadBy,aP:aP.length?mean(aP):null,aC:aC.length?mean(aC):null}}
+/* which axle to split left/right: the user's choice, else the stronger reference (front if too close to call) */
+function cAx(r){const p=r&&r.pair('F','R'),auto=p&&p.n?(p.x<=1/1.15?'R':'F'):null;return{ax:cAxle||auto||'F',auto,p}}
+const SN={F:'Front',R:'Rear',FL:'Front left',FR:'Front right',RL:'Rear left',RR:'Rear right'};
+/* x = stronger ÷ weaker over the shared speed range p */
+const cmpTxt=(x,a,b,p)=>{const rg=`${p.lo}–${p.hi} ${uName()}`;return x>=1.3?`<b style="color:${CC[a]}">${SN[a]} is ${x.toFixed(1)}× stronger than ${SN[b].toLowerCase()}</b> (${rg}).`:x>=1.15?`${SN[a]} is slightly stronger than ${SN[b].toLowerCase()} (${x.toFixed(2)}×, ${rg}). Not conclusive.`:`${SN[a]} and ${SN[b].toLowerCase()} are similar (within ${Math.round((x-1)*100)}%, ${rg}).`};
 function cUI(){
- $('cGrid').innerHTML=CORN.map(k=>{const c=corners[k],v=c&&c.rows.map(r=>r[0]*cF(c)).filter(x=>x>1);return`<button data-c="${k}" class="${k===cSel?'sel':''}" style="border-left:6px solid ${CC[k]}"><b>${k}</b>${c?`${Math.round(c.rows.length/2/60*10)/10} min · ${v.length?Math.min(...v).toFixed(0)+'–'+Math.max(...v).toFixed(0)+' '+uName():'not moving'}`:'Not recorded'}</button>`}).join('');
- document.querySelectorAll('#cGrid button').forEach(b=>b.onclick=()=>{if(cRun)return;cSel=b.dataset.c;cUI()});
- $('cRunBtn').textContent=cRun?`Stop and save ${cRun.pos}`:`Start run: ${CN[cSel]}`;$('cRunBtn').classList.toggle('rec',!!cRun);$('cDelBtn').style.display=corners[cSel]&&!cRun?'':'none';
- if(!cRun)$('cInfo').textContent=corners[cSel]?`${CN[cSel]} saved. Starting a new run replaces it.`:'Mount the phone at this corner, then start.';
- const r=cCompare();if(!r){$('cOut').innerHTML='';drawCorner();return}const u=uName(),out=[];
- const ranked=r.have.filter(k=>r.score[k]!=null).sort((a,b)=>r.score[b]-r.score[a]);
+ const r=cCompare(),{ax,auto,p:fr}=cAx(r),L=ax+'L',Rt=ax+'R',steps=[['F',1],['R',2],[L,3],[Rt,4]],u=uName();
+ const tile=([k,n])=>{const c=corners[k],v=c&&c.rows.map(x=>x[0]*cF(c)).filter(x=>x>1);return`<button data-c="${k}" class="${k===cSel?'sel':''}" style="border-left:6px solid ${CC[k]}"><b>${n} · ${CN[k]}</b>${c?`✓ ${Math.round(c.rows.length/2/60*10)/10} min · ${v.length?Math.min(...v).toFixed(0)+'–'+Math.max(...v).toFixed(0)+' '+u:'not moving'}`:'Not recorded'}</button>`};
+ let s1='';if(fr&&fr.n){const [a,b]=fr.x>=1?['F','R']:['R','F'];s1=cmpTxt(Math.max(fr.x,1/fr.x),a,b,fr)}else if(corners.F&&corners.R)s1='The two reference runs share no speed band yet. Drive both through the same speeds.';else s1='Record both reference runs on the same route to compare front and rear.';
+ const axTxt=`Step 3–4: left vs right at the <b>${ax==='F'?'front':'rear'}</b>`+(cAxle?' (your choice)':auto?' (stronger axle)':fr&&fr.n?'':'');
+ $('cGrid').innerHTML=`<div class="cgrid">${steps.slice(0,2).map(tile).join('')}</div><p style="margin:10px 0">${s1}</p>
+  <p class="muted" style="margin:0 0 6px">${axTxt}${fr&&fr.n&&fr.x<1.15&&fr.x>1/1.15&&!cAxle?'. Front and rear are close, so start where you feel it most: steering wheel shake points to the front, seat or floor shake to the rear.':''}</p>
+  <div class="row" style="margin-bottom:10px"><button class="b" data-ax="F"${ax==='F'?' style="border-color:var(--ink)"':''}>Split front</button><button class="b" data-ax="R"${ax==='R'?' style="border-color:var(--ink)"':''}>Split rear</button></div>
+  <div class="cgrid">${steps.slice(2).map(tile).join('')}</div>`;
+ document.querySelectorAll('#cGrid button[data-c]').forEach(b=>b.onclick=()=>{if(cRun)return;cSel=b.dataset.c;cUI()});
+ document.querySelectorAll('#cGrid button[data-ax]').forEach(b=>b.onclick=()=>{if(cRun)return;cAxle=b.dataset.ax;try{localStorage.setItem('ordertrace_axle',cAxle)}catch(e){}if(/^[FR][LR]$/.test(cSel))cSel=cAxle+cSel[1];cUI()});
+ $('cRunBtn').textContent=cRun?`Stop and save: ${CN[cRun.pos]}`:`Start run: ${CN[cSel]}`;$('cRunBtn').classList.toggle('rec',!!cRun);$('cDelBtn').style.display=corners[cSel]&&!cRun?'':'none';
+ if(!cRun)$('cInfo').textContent=(corners[cSel]?`${CN[cSel]} saved. Starting a new run replaces it. `:'')+'Phone: '+MH[cSel];
+ if(!r){$('cOut').innerHTML='';drawCorner();return}const out=[];
  if(r.ok==='T2')out.push('Compared on tyre 2nd order (T2), which is clearly stronger than T1 in these runs. T2 usually means an out-of-round tyre or rim rather than imbalance.');
- if(ranked.length>=2){const a=ranked[0],b=ranked[1],x=r.score[a]/r.score[b];out.push(x>=1.3?`<b style="color:${CC[a]}">Strongest at ${CN[a]}</b>: wheel-speed (${r.ok}) vibration ${x.toFixed(1)}× the next corner (${CN[b]}) at matched speeds.`:`No clear winner yet: ${CN[a]} and ${CN[b]} are within ${Math.round((x-1)*100)}% of each other.`);
-  const f=['FL','FR'].filter(k=>r.score[k]!=null),re=['RL','RR'].filter(k=>r.score[k]!=null);if(f.length&&re.length){const fr=mean(f.map(k=>r.score[k]))/mean(re.map(k=>r.score[k]));out.push(fr>1.2?'Front stronger than rear.':fr<1/1.2?'Rear stronger than front.':'Front and rear similar.')}}
- else out.push('Record at least two corners over the same speeds to compare.');
+ const lrp=r.pair(L,Rt);if(lrp&&lrp.n){const [a,b]=lrp.x>=1?[L,Rt]:[Rt,L],x=Math.max(lrp.x,1/lrp.x);out.push(`<b>Left vs right (${ax==='F'?'front':'rear'})</b>: ${cmpTxt(x,a,b,lrp)}`);
+  const axSure=fr&&fr.n&&(ax==='F'?fr.x>=1.3:fr.x<=1/1.3);if(x>=1.3)out.push(`<b style="color:${CC[a]}">Most likely corner: ${CN[a]}</b>${axSure?'.':'. The front/rear step was not clear-cut, so treat this as a lead and confirm by swapping that wheel to the other axle.'}`)}
+ else if(corners[L]&&corners[Rt])out.push('The left and right runs share no speed band yet.');
  if(r.load){const x=r.load.ratio,per=r.have.filter(k=>r.loadBy[k]).map(k=>`${k} ${r.loadBy[k].ratio.toFixed(1)}×`).join(', ');
-  out.push(`<b>Load test</b>: ${r.ok} averages ${r.load.p.toFixed(0)} mg while gently accelerating vs ${r.load.c.toFixed(0)} mg while lifting off, at the same speeds (${r.load.bands} speed bands). `+(x>=1.4?'It gets clearly worse under power, which points to the driveline (half-shaft / CV joint) rather than a wheel, hub or disc.':x<=1/1.4?'It is stronger off throttle, which is unusual. Check for play in the joints or bushes.':'Load makes little difference, which points to a rotating imbalance (rim, hub seating, disc) rather than a CV joint.')+(per?` Per corner (accelerating ÷ lifting off): ${per}.`:''));
+  out.push(`<b>Load test</b>: ${r.ok} averages ${r.load.p.toFixed(0)} mg while gently accelerating vs ${r.load.c.toFixed(0)} mg while lifting off, at the same speeds (${r.load.bands} speed band${r.load.bands>1?'s':''}). `+(x>=1.4?'It gets clearly worse under power, which points to the driveline (half-shaft / CV joint) rather than a wheel, hub or disc.':x<=1/1.4?'It is stronger off throttle, which is unusual. Check for play in the joints or bushes.':'Load makes little difference, which points to a rotating imbalance (rim, hub seating, disc) rather than a CV joint.')+(per?` Per run (accelerating ÷ lifting off): ${per}.`:''));
   if(r.aP!=null&&r.aC!=null&&r.aP>1.5*r.aC)out.push(`<span class="muted">You accelerated at ${r.aP.toFixed(2)} m/s² on average but the car slowed at only ${r.aC.toFixed(2)} m/s² when you lifted off. Faster speed change makes the reading lower, so the accelerating value is understated. Accelerate more gently next time, about as fast as the car slows when you lift off.</span>`)}
  else out.push('Load test: needs both gentle acceleration and lifting off (no brakes) through the same speeds. Hard acceleration and braking are not used.');
  const tb=r.tbl.filter(t=>Object.values(t.vals).some(x=>x!=null));
- $('cOut').innerHTML=out.map(s=>`<p style="margin:10px 0 0">${s}</p>`).join('')+(tb.length?`<div class="scroll" style="margin-top:10px"><table><tr><th>${u}</th>${r.have.map(k=>`<th class="num">${k}</th>`).join('')}</tr>${tb.map(t=>{const mx=Math.max(...Object.values(t.vals).filter(x=>x!=null));return`<tr><td>${t.b}–${t.b+r.bw}</td>${r.have.map(k=>`<td class="num"${t.vals[k]!=null&&t.vals[k]===mx&&Object.values(t.vals).filter(x=>x!=null).length>1?` style="color:${CC[k]};font-weight:700"`:''}>${t.vals[k]==null?'':t.vals[k].toFixed(0)}</td>`).join('')}</tr>`}).join('')}</table></div><p class="muted" style="margin:6px 0 0">${r.ok} in mg, averaged per ${r.bw} ${u} band. Strongest corner per band in colour.</p>`:'');
+ $('cOut').innerHTML=out.map(s=>`<p style="margin:10px 0 0">${s}</p>`).join('')+(tb.length?`<div class="scroll" style="margin-top:10px"><table><tr><th>${u}</th>${r.have.map(k=>`<th class="num" style="color:${CC[k]}">${k}</th>`).join('')}</tr>${tb.map(t=>`<tr><td>${t.b}–${t.b+r.bw}</td>${r.have.map(k=>`<td class="num">${t.vals[k]==null?'':t.vals[k].toFixed(0)}</td>`).join('')}</tr>`).join('')}</table></div><p class="muted" style="margin:6px 0 0">${r.ok} in mg, averaged per ${r.bw} ${u} band. F and R are the reference runs.</p>`:'');
  drawCorner()}
 function drawCorner(){const c=$('cChart');if(!c||!c.offsetParent)return;const[x,W,H]=ctx(c),r=cCompare();x.font='11px -apple-system,sans-serif';x.fillStyle=css('--dim');if(!r){x.fillText('No corner runs yet',10,H/2);return}
  let vm=10,am=20;r.tbl.forEach(t=>{vm=Math.max(vm,t.b+r.bw);Object.values(t.vals).forEach(v=>{if(v!=null)am=Math.max(am,v)})});am*=1.1;axes(x,W,H,vm,am,`${uName()} →`);const X=v=>30+(W-34)*v/vm,Y=a=>8+(H-30)*(1-a/am);
- r.have.forEach(k=>{const pts=r.tbl.filter(t=>t.vals[k]!=null).map(t=>[t.b+r.bw/2,t.vals[k]]);if(!pts.length)return;x.beginPath();pts.forEach((p,i)=>i?x.lineTo(X(p[0]),Y(p[1])):x.moveTo(X(p[0]),Y(p[1])));x.strokeStyle=CC[k];x.lineWidth=2;x.stroke();const l=pts[pts.length-1];x.fillStyle=CC[k];x.fillText(k,Math.min(W-20,X(l[0])+3),Y(l[1])-3)})}
-$('cRunBtn').onclick=async()=>{if(cRun){if(cRun.rows.length>=10){corners[cRun.pos]={rows:cRun.rows,date:Date.now(),u:S.units};cSave()}else $('cInfo').textContent='Run too short to save.';cRun=null;cUI();return}
+ r.have.forEach(k=>{const pts=r.tbl.filter(t=>t.vals[k]!=null).map(t=>[t.b+r.bw/2,t.vals[k]]);if(!pts.length)return;x.beginPath();pts.forEach((p,i)=>i?x.lineTo(X(p[0]),Y(p[1])):x.moveTo(X(p[0]),Y(p[1])));x.strokeStyle=CC[k];x.lineWidth=2;if(k==='F'||k==='R')x.setLineDash([5,4]);x.stroke();x.setLineDash([]);const l=pts[pts.length-1];x.fillStyle=CC[k];x.fillText(k,Math.min(W-20,X(l[0])+3),Y(l[1])-3)})}
+/* after saving, move on to the next step that has no run yet */
+function cNext(){const {ax}=cAx(cCompare());return['F','R',ax+'L',ax+'R'].find(k=>!corners[k])||cSel}
+$('cRunBtn').onclick=async()=>{if(cRun){if(cRun.rows.length>=10){corners[cRun.pos]={rows:cRun.rows,date:Date.now(),u:S.units};cSave();cRun=null;cSel=cNext();cUI()}else{cRun=null;cUI();$('cInfo').textContent='Run too short to save (needs about 10 s of data after the first 5 s). Start it again.'}return}
  if(!running)await start();if(!running)return;cRun={pos:cSel,rows:[],t0:performance.now()/1000};cUI()};
 $('cDelBtn').onclick=()=>{delete corners[cSel];cSave();cUI()};
-cUI();
+cSel=cNext();cUI();
 
 document.addEventListener('visibilitychange',async()=>{if(running&&document.visibilityState==='visible'){try{wake=await navigator.wakeLock?.request('screen')}catch(e){}}});
 $('startBtn').onclick=start;$('recBtn').onclick=toggleRec;
